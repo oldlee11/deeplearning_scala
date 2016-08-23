@@ -1,9 +1,9 @@
 # deeplearning_scala
 deeplearning with scala(2.10.6)  java-SE 1.8
 
-src/dp_process/* include :  dA sdA RBM DBN LogisticRegression Dropout
+src/dp_process/* include :  LogisticRegression   HiddenLayer  Dropout  dA   sdA   RBM   DBN
 
-and do labs with minst dataset 
+do labs with minst dataset 
 
 refer to https://github.com/yusugomori/DeepLearning
 
