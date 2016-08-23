@@ -8,5 +8,6 @@ this include :  dA
                 LogisticRegression 
                 Dropout
                 
+do labs with minst dataset 
 refer to https://github.com/yusugomori/DeepLearning
 
