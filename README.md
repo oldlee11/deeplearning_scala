@@ -1,3 +1,3 @@
 # deeplearning_scala
 deeplearning with scala
-refer to yusugomori
+refer to https://github.com/yusugomori/DeepLearning
