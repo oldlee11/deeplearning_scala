@@ -167,6 +167,7 @@ class HiddenLayer(val n_in: Int, val n_out: Int, _W: Array[Array[Double]], _b: A
     }     
     //局部梯度 d_v=sum(下一层的d_v*下一层的w)*(样本input经过本层后的线性输出值,在带入activation的导数中)
     for(j <- 0 until next_layer.n_in){
+      d_v(j)=0.0 //清空为0
       for(i <-0 until next_layer.n_out){
         d_v(j)= d_v(j) + next_layer.W(i)(j)*next_layer.d_v(i)  
       }
@@ -199,6 +200,7 @@ class HiddenLayer(val n_in: Int, val n_out: Int, _W: Array[Array[Double]], _b: A
     }     
     //局部梯度 d_v=sum(下一层的d_v*下一层的w)*(样本input经过本层后的线性输出值,在带入activation的导数中)
     for(j <- 0 until next_layer.n_in){
+      d_v(j)=0.0 //清空为0
       for(i <-0 until next_layer.n_out){
         d_v(j)= d_v(j) + next_layer.W(i)(j)*next_layer.d_y(i)  
       }
