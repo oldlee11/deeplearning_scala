@@ -26,7 +26,8 @@ class CNN(input_size:(Int,Int),
           n_hidden:Int,
           n_channel:Int=3,
           var rng: Random=null,
-          activation:String="ReLU") {
+          activation:String="ReLU",
+          activation_mlp:String="tanh") {
     
   //ConvPoolLayer层个数
   val n_ConvPoolLayer=n_kernel_Array.length
@@ -58,7 +59,7 @@ class CNN(input_size:(Int,Int),
                                    _W=null, 
                                    _b=null, 
                                    rng=null,
-                                   activation=activation)
+                                   activation=activation_mlp)
   val log_layer = new LogisticRegression(n_hidden,output_size)
   
   /*输入一个样本,并训练更新一下系数(更新时要除以batch_num)
@@ -88,6 +89,7 @@ class CNN(input_size:(Int,Int),
      * step2 forward & backward log_layer
     */
     val layer_input_copy_one:Array[Double]=flatten(layer_input)//打平
+    val hidden_layer_out:Array[Double]=hidden_layer.forward(input=layer_input_copy_one)
     if(debug){
       def see_w_max_min(w_in:Array[Array[Array[Array[Double]]]],max_min:String):Double={
         var result:Double=0.0;
@@ -107,22 +109,53 @@ class CNN(input_size:(Int,Int),
         }
         result
       }
+      def see_d_v_max_min(w_in:Array[Array[Array[Double]]],max_min:String):Double={
+        var result:Double=0.0;
+        for(i<-0 until w_in.length){
+          for(j<-0 until w_in(0).length){
+            for(k<-0 until w_in(0)(0).length){
+                if(max_min=="max")
+                  result=math.max(w_in(i)(j)(k),result)
+                else if(max_min=="min")
+                  result=math.min(w_in(i)(j)(k),result)
+                else if(max_min=="sum")
+                  result +=w_in(i)(j)(k)
+            }
+          }
+        }
+        result
+      }      
       print("max flatten out are:"+layer_input_copy_one.reduce(math.max(_,_))+"\n")
       print("min flatten out are:"+layer_input_copy_one.reduce(math.min(_,_))+"\n") 
-      print("sum flatten out are:"+layer_input_copy_one.reduce(_ + _)+"\n") 
+      print("avg flatten out are:"+layer_input_copy_one.reduce(_ + _)/layer_input_copy_one.length+"\n") 
       for(i<-0 until n_kernel_Array.length){
         print("max convpoollayer_"+i+" w are:"+see_w_max_min(ConvPoolLayer_layers(i).ConvLayer_obj.W,"max")+"\n")
         print("min convpoollayer_"+i+" w are:"+see_w_max_min(ConvPoolLayer_layers(i).ConvLayer_obj.W,"min")+"\n")   
-        print("sum convpoollayer_"+i+" w are:"+see_w_max_min(ConvPoolLayer_layers(i).ConvLayer_obj.W,"sum")+"\n")      
+        //print("sum convpoollayer_"+i+" w are:"+see_w_max_min(ConvPoolLayer_layers(i).ConvLayer_obj.W,"sum")+"\n")    
+        print("sum_per_out convpoollayer_"+i+" w are:"+see_w_max_min(ConvPoolLayer_layers(i).ConvLayer_obj.W,"sum")/ConvPoolLayer_layers(i).f_out_tmp+"\n")  
+        print("max convpoollayer_"+i+" d_v are:"+see_d_v_max_min(ConvPoolLayer_layers(i).ConvLayer_obj.d_v,"max")+"\n")
+        print("min convpoollayer_"+i+" d_v are:"+see_d_v_max_min(ConvPoolLayer_layers(i).ConvLayer_obj.d_v,"min")+"\n")  
       }
-    }
-    val hidden_layer_out:Array[Double]=hidden_layer.forward(input=layer_input_copy_one)
+      print("max hidden_layer w:"+hidden_layer.W.reduce(_++_).reduce(math.max(_,_))+"\n");//debug
+      print("min hidden_layer w:"+hidden_layer.W.reduce(_++_).reduce(math.min(_,_))+"\n");//debug
+      //print("sum hidden_layer w:"+hidden_layer.W.reduce(_++_).reduce(_+_)+"\n");//debug
+      print("sum_per_out hidden_layer w:"+hidden_layer.W.reduce(_++_).reduce(_+_)/hidden_layer.n_out+"\n");//debug
+      print("max hidden_layer d_v:"+hidden_layer.d_v.reduce(math.max(_,_))+"\n");//debug
+      print("min hidden_layer d_v:"+hidden_layer.d_v.reduce(math.min(_,_))+"\n");//debug
+      print("max log_layer w:"+log_layer.W.reduce(_++_).reduce(math.max(_,_))+"\n");//debug
+      print("min log_layer w:"+log_layer.W.reduce(_++_).reduce(math.min(_,_))+"\n");//debug
+      //print("sum log_layer w:"+log_layer.W.reduce(_++_).reduce(_+_)+"\n");//debug   
+      print("sum_per_out log_layer w:"+log_layer.W.reduce(_++_).reduce(_+_)/log_layer.n_out+"\n");//debug     
+      print("max out:"+log_layer.predict(hidden_layer_out).reduce(math.max(_,_))+"\n");//debug
+      print("min out:"+log_layer.predict(hidden_layer_out).reduce(math.min(_,_))+"\n");//debug
+      print("max hidden_layer d_v:"+log_layer.d_y.reduce(math.max(_,_))+"\n");//debug
+      print("min hidden_layer d_v:"+log_layer.d_y.reduce(math.min(_,_))+"\n");//debug      
+    }    
     log_layer.train(x=hidden_layer_out,y=y,lr=lr,batch_num=batch_num)
     hidden_layer.backward_2(next_layer=log_layer, 
                             input=layer_input_copy_one, 
                             batch_num=batch_num, 
                             lr=lr, 
-                            L2_reg=0.0, 
                             alpha=0.9, 
                             dropout=false, 
                             mask=Array())
@@ -224,164 +257,164 @@ object CNN {
     Array(
       Array(
         Array(1, 1, 1, 0, 0, 0,0,0,0),
-        Array(1, 0, 1, 0, 0, 0,0,0,0),
         Array(1, 1, 1, 0, 0, 0,0,0,0),
-        Array(0, 0, 1, 1, 1, 0,0,0,0),
-        Array(0, 0, 1, 0, 1, 0,0,0,0),
-        Array(0, 0, 1, 1, 1, 0,0,0,0)   
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0)   
       ),
       Array(
-        Array(0, 0, 0, 0, 0, 1,1, 1, 1),
-        Array(0, 0, 1, 0, 0, 1,1, 1, 1),
-        Array(1, 0, 0, 0, 0, 1,1, 0, 1), 
-        Array(0, 0, 1, 1, 1, 0,0,0,0),
-        Array(0, 0, 1, 0, 1, 0,0,0,0),
-        Array(0, 0, 1, 1, 1, 0,0,0,0) 
+        Array(0, 0, 0, 1, 1, 1,0, 0, 0),
+        Array(0, 0, 0, 1, 1, 1,0, 0, 0),
+        Array(0, 0, 0, 1, 1, 1,0, 0, 0), 
+        Array(0, 0, 0, 1, 1, 1,0,0,0),
+        Array(0, 0, 0, 1, 1, 1,0,0,0),
+        Array(0, 0, 0, 1, 1, 1,0,0,0) 
       )    
     ),
     Array(
       Array(
         Array(1, 1, 1, 0, 0, 0,0,0,0),
-        Array(1, 0, 1, 0, 0, 0,0,1,0),
-        Array(0, 1, 1, 0, 0, 0,0,0,0),
-        Array(0, 0, 1, 1, 1, 0,0,1,0),
-        Array(0, 0, 1, 0, 1, 0,0,0,0),
-        Array(0, 0, 1, 1, 1, 0,0,0,0)   
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0)   
       ),
       Array(
-        Array(0, 0, 0, 0, 0, 1,1, 1, 1),
-        Array(0, 0, 1, 0, 0, 1,1, 1, 1),
-        Array(1, 0, 0, 0, 0, 0,1, 1, 1), 
-        Array(0, 0, 1, 1, 1, 0,0,0,0),
-        Array(0, 1, 1, 1, 1, 0,1,0,0),
-        Array(0, 0, 1, 1, 1, 0,0,0,0) 
-      )    
+        Array(0, 0, 0, 1, 1, 1,0, 0, 0),
+        Array(0, 0, 0, 1, 1, 1,0, 0, 0),
+        Array(0, 0, 0, 1, 1, 1,0, 0, 0), 
+        Array(0, 0, 0, 1, 1, 1,0,0,0),
+        Array(0, 0, 0, 1, 1, 1,0,0,0),
+        Array(0, 0, 0, 1, 1, 1,0,0,0) 
+      )     
     ),    
     Array(
       Array(
         Array(1, 1, 1, 0, 0, 0,0,0,0),
         Array(1, 1, 1, 0, 0, 0,0,0,0),
         Array(1, 1, 1, 0, 0, 0,0,0,0),
-        Array(0, 0, 1, 1, 1, 0,0,0,0),
-        Array(0, 0, 1, 1, 1, 0,0,0,0),
-        Array(0, 0, 1, 1, 1, 0,0,0,0)   
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0)   
       ),
       Array(
-        Array(0, 0, 0, 0, 0, 0,1, 1, 1),
-        Array(0, 0, 1, 0, 0, 1,1, 1, 1),
-        Array(1, 0, 0, 0, 0, 1,1, 1, 1), 
-        Array(0, 0, 1, 1, 1, 0,0, 0, 0),
-        Array(0, 0, 1, 1, 1, 0,0, 0, 0),
-        Array(0, 0, 1, 1, 1, 0,0, 0, 0) 
-      )    
+        Array(0, 0, 0, 1, 1, 1,0, 0, 0),
+        Array(0, 0, 0, 1, 1, 1,0, 0, 0),
+        Array(0, 0, 0, 1, 1, 1,0, 0, 0), 
+        Array(0, 0, 0, 1, 1, 1,0,0,0),
+        Array(0, 0, 0, 1, 1, 1,0,0,0),
+        Array(0, 0, 0, 1, 1, 1,0,0,0) 
+      )     
     ),
     Array(
       Array(
-        Array(1, 1, 1, 0, 0, 1,1,1,1),
-        Array(1, 1, 1, 0, 0, 1,1,0,1),
-        Array(1, 1, 0, 0, 0, 1,1,1,1),
-        Array(0, 0, 1, 1, 1, 0,0,0,0),
-        Array(0, 0, 1, 0, 1, 0,0,1,0),
-        Array(0, 0, 1, 1, 1, 0,0,0,0)   
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1)   
       ),
       Array(
-        Array(0, 0, 0, 0, 0, 0,1, 1, 0),
-        Array(0, 0, 1, 0, 0, 0,1, 1, 1),
-        Array(1, 0, 0, 0, 0, 0,1, 1, 1), 
-        Array(0, 0, 1, 1, 1, 1,1, 0, 1),
-        Array(0, 0, 1, 1, 1, 1,1, 1, 1),
-        Array(0, 0, 1, 1, 0, 1,1, 1, 1) 
-      )    
+        Array(0, 0, 0, 1, 1, 1,0, 0, 0),
+        Array(0, 0, 0, 1, 1, 1,0, 0, 0),
+        Array(0, 0, 0, 1, 1, 1,0, 0, 0), 
+        Array(0, 0, 0, 1, 1, 1,0,0,0),
+        Array(0, 0, 0, 1, 1, 1,0,0,0),
+        Array(0, 0, 0, 1, 1, 1,0,0,0) 
+      )   
     ),    
     Array(
       Array(
-        Array(1, 1, 1, 0, 0, 1,1,1,1),
-        Array(1, 1, 1, 0, 0, 1,1,1,1),
-        Array(1, 1, 1, 0, 0, 1,1,1,1),
-        Array(0, 0, 1, 1, 1, 0,0,0,0),
-        Array(0, 0, 1, 1, 1, 0,0,0,0),
-        Array(0, 0, 1, 1, 1, 0,0,0,0)   
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1)   
       ),
       Array(
-        Array(0, 0, 0, 0, 0, 0,1, 1, 1),
-        Array(0, 0, 1, 0, 0, 0,1, 1, 1),
-        Array(1, 0, 0, 0, 0, 0,1, 1, 1), 
-        Array(0, 0, 1, 1, 1, 1,1, 1, 1),
-        Array(0, 0, 1, 1, 1, 1,1, 1, 1),
-        Array(0, 0, 1, 1, 1, 1,1, 1, 1) 
+        Array(0, 0, 0, 1, 1, 1,0, 0, 0),
+        Array(0, 0, 0, 1, 1, 1,0, 0, 0),
+        Array(0, 0, 0, 1, 1, 1,0, 0, 0), 
+        Array(0, 0, 0, 1, 1, 1,0,0,0),
+        Array(0, 0, 0, 1, 1, 1,0,0,0),
+        Array(0, 0, 0, 1, 1, 1,0,0,0) 
       )    
     ), 
     Array(
       Array(
-        Array(1, 1, 1, 0, 0, 1,1,1,1),
-        Array(1, 0, 1, 0, 0, 1,1,0,1),
-        Array(1, 1, 1, 0, 0, 1,1,1,1),
-        Array(0, 0, 1, 1, 1, 0,0,0,0),
-        Array(0, 0, 1, 0, 1, 0,0,1,0),
-        Array(0, 0, 1, 1, 1, 0,0,0,0)   
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1)   
       ),
       Array(
-        Array(0, 0, 0, 0, 0, 0,1, 1, 1),
-        Array(0, 0, 1, 0, 0, 0,1, 1, 1),
-        Array(1, 0, 0, 0, 0, 0,1, 0, 1), 
-        Array(0, 0, 1, 1, 1, 1,1, 1, 1),
-        Array(0, 0, 1, 0, 1, 1,1, 0, 1),
-        Array(0, 0, 1, 1, 1, 1,1, 1, 1) 
-      )    
+        Array(0, 0, 0, 1, 1, 1,0, 0, 0),
+        Array(0, 0, 0, 1, 1, 1,0, 0, 0),
+        Array(0, 0, 0, 1, 1, 1,0, 0, 0), 
+        Array(0, 0, 0, 1, 1, 1,0,0,0),
+        Array(0, 0, 0, 1, 1, 1,0,0,0),
+        Array(0, 0, 0, 1, 1, 1,0,0,0) 
+      )   
     ), 
     Array(
       Array(
-        Array(0, 0, 0, 0, 0, 1,1, 1, 1),
-        Array(0, 0, 1, 0, 0, 1,1, 1, 1),
-        Array(1, 0, 0, 0, 0, 1,1, 0, 1), 
-        Array(0, 0, 1, 1, 1, 0,0, 0, 0),
-        Array(0, 0, 1, 0, 1, 0,0, 0, 0),
-        Array(0, 0, 1, 1, 1, 0,0, 0, 0) 
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0)   
       ),          
       Array(
-        Array(1, 1, 1, 0, 0, 0,0,0,0),
-        Array(1, 0, 1, 0, 0, 0,0,0,0),
-        Array(1, 1, 1, 0, 0, 0,0,0,0),
-        Array(0, 0, 1, 1, 1, 0,0,0,0),
-        Array(0, 0, 1, 0, 1, 0,0,0,0),
-        Array(0, 0, 1, 1, 1, 0,0,0,0)   
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1)    
       )  
     ),   
     Array(
       Array(
-        Array(0, 0, 0, 0, 0, 1,1, 1, 1),
-        Array(0, 0, 1, 0, 0, 1,1, 1, 1),
-        Array(1, 0, 0, 0, 0, 1,1, 1, 1), 
-        Array(0, 0, 1, 1, 1, 0,0, 0, 0),
-        Array(0, 0, 1, 1, 1, 0,0, 0, 0),
-        Array(0, 0, 1, 1, 1, 0,0, 0, 0) 
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0)   
       ),          
       Array(
-        Array(1, 1, 1, 0, 0, 0,0,0,0),
-        Array(1, 1, 1, 0, 0, 0,0,0,0),
-        Array(1, 1, 1, 0, 0, 0,0,0,0),
-        Array(0, 0, 1, 1, 1, 0,0,0,0),
-        Array(0, 0, 1, 1, 1, 0,0,0,0),
-        Array(0, 0, 1, 1, 1, 0,0,0,0)   
-      )  
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1)    
+      ) 
     )  ,   
     Array(
       Array(
-        Array(0, 0, 0, 0, 0, 1,1, 1, 1),
-        Array(0, 0, 1, 0, 0, 1,1, 0, 1),
-        Array(1, 0, 0, 0, 0, 1,1, 1, 1), 
-        Array(0, 0, 1, 1, 1, 0,0, 0, 0),
-        Array(0, 0, 1, 0, 1, 0,0, 0, 0),
-        Array(0, 0, 1, 1, 1, 0,0, 0, 0) 
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0)   
       ),          
       Array(
-        Array(1, 1, 1, 0, 0, 0,0,0,1),
-        Array(1, 0, 1, 0, 0, 0,0,0,0),
-        Array(1, 1, 1, 0, 0, 0,0,0,0),
-        Array(0, 0, 1, 1, 1, 0,0,1,0),
-        Array(0, 0, 1, 0, 1, 0,0,0,0),
-        Array(0, 0, 1, 1, 1, 0,0,0,0)   
-      )  
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1)    
+      )   
     )   
     )
     val train_Y: Array[Array[Int]] = Array(
@@ -396,9 +429,9 @@ object CNN {
       Array(0, 0,1)     
     )
     val n_out:Int=3   
-    val classifier = new  CNN(input_size=(6,9),output_size=n_out,n_kernel_Array=Array(20),kernel_size_Array=Array((3,4)),pool_size_Array=Array((2,3)),n_channel=2,n_hidden=20,rng=null,activation="ReLU")
-    //val classifier = new  CNN(input_size=(6,9),output_size=n_out,n_kernel_Array=Array(20),kernel_size_Array=Array((3,4)),pool_size_Array=Array((2,3)),n_channel=2,n_hidden=20,rng=null,activation="sigmoid")
-    val n_epochs:Int=30
+    //val classifier = new  CNN(input_size=(6,9),output_size=n_out,n_kernel_Array=Array(20),kernel_size_Array=Array((3,4)),pool_size_Array=Array((2,3)),n_channel=2,n_hidden=20,rng=null,activation="ReLU",activation_mlp="tanh")
+    val classifier = new  CNN(input_size=(6,9),output_size=n_out,n_kernel_Array=Array(50),kernel_size_Array=Array((3,4)),pool_size_Array=Array((2,3)),n_channel=2,n_hidden=20,rng=null,activation="ReLU",activation_mlp="tanh")
+    val n_epochs:Int=500
     val train_N:Int=train_Y.length
     var learning_rate:Double=0.1
     // train
@@ -407,7 +440,7 @@ object CNN {
     for(epoch <- 0 until n_epochs) {
       print("epoch_"+epoch+":\n")
       classifier.train_batch(inputs_x=train_X, inputs_y=train_Y, lr=learning_rate, batch_num_per=1.0, save_module_path="",debug=false)
-      learning_rate *=0.9
+      learning_rate *=0.95
     }
     
      // test data
@@ -415,56 +448,56 @@ object CNN {
     Array(
       Array(
         Array(1, 1, 1, 0, 0, 0,0,0,0),
-        Array(1, 0, 1, 0, 0, 0,0,0,0),
         Array(1, 1, 1, 0, 0, 0,0,0,0),
-        Array(0, 0, 1, 1, 1, 0,0,0,0),
-        Array(0, 0, 1, 0, 1, 0,0,0,0),
-        Array(0, 0, 1, 1, 1, 0,0,0,0)   
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0)   
       ),
       Array(
-        Array(0, 0, 0, 0, 0, 1,1, 1, 1),
-        Array(0, 0, 1, 0, 0, 1,1, 1, 1),
-        Array(1, 0, 0, 0, 0, 1,1, 0, 1), 
-        Array(0, 0, 1, 1, 1, 0,0,0,0),
-        Array(0, 0, 1, 0, 1, 0,0,0,0),
-        Array(0, 0, 1, 1, 1, 0,0,0,0) 
-      )    
+        Array(0, 0, 0, 1, 1, 1,0, 0, 0),
+        Array(0, 0, 0, 1, 1, 1,0, 0, 0),
+        Array(0, 0, 0, 1, 1, 1,0, 0, 0), 
+        Array(0, 0, 0, 1, 1, 1,0,0,0),
+        Array(0, 0, 0, 1, 1, 1,0,0,0),
+        Array(0, 0, 0, 1, 1, 1,0,0,0) 
+      ) 
     ),
     Array(
       Array(
-        Array(0, 0, 0, 0, 0, 1,1, 1, 1),
-        Array(0, 0, 1, 0, 0, 1,1, 0, 1),
-        Array(1, 0, 0, 0, 0, 1,1, 1, 1), 
-        Array(0, 0, 1, 1, 1, 0,0, 0, 0),
-        Array(0, 0, 1, 0, 1, 0,0, 0, 0),
-        Array(0, 0, 1, 1, 1, 0,0, 0, 0) 
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0),
+        Array(1, 1, 1, 0, 0, 0,0,0,0)   
       ),          
       Array(
-        Array(1, 1, 1, 0, 0, 0,0,0,1),
-        Array(1, 0, 1, 0, 0, 0,0,0,0),
-        Array(1, 1, 1, 0, 0, 0,0,0,0),
-        Array(0, 0, 1, 1, 1, 0,0,1,0),
-        Array(0, 0, 1, 0, 1, 0,0,0,0),
-        Array(0, 0, 1, 1, 1, 0,0,0,0)   
-      )  
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1)    
+      ) 
     ) ,
     Array(
       Array(
-        Array(1, 1, 1, 0, 0, 1,1,1,1),
-        Array(1, 0, 1, 0, 0, 1,1,0,1),
-        Array(1, 1, 1, 0, 0, 1,1,1,1),
-        Array(0, 0, 1, 1, 1, 0,0,0,0),
-        Array(0, 0, 1, 0, 1, 0,0,1,0),
-        Array(0, 0, 1, 1, 1, 0,0,0,0)   
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1),
+        Array(0, 0, 0, 0, 0, 0,1,1,1)   
       ),
       Array(
-        Array(0, 0, 0, 0, 0, 0,1, 1, 1),
-        Array(0, 0, 1, 0, 0, 0,1, 1, 1),
-        Array(1, 0, 0, 0, 0, 0,1, 0, 1), 
-        Array(0, 0, 1, 1, 1, 1,1, 1, 1),
-        Array(0, 0, 1, 0, 1, 1,1, 0, 1),
-        Array(0, 0, 1, 1, 1, 1,1, 1, 1) 
-      )    
+        Array(0, 0, 0, 1, 1, 1,0, 0, 0),
+        Array(0, 0, 0, 1, 1, 1,0, 0, 0),
+        Array(0, 0, 0, 1, 1, 1,0, 0, 0), 
+        Array(0, 0, 0, 1, 1, 1,0,0,0),
+        Array(0, 0, 0, 1, 1, 1,0,0,0),
+        Array(0, 0, 0, 1, 1, 1,0,0,0) 
+      )   
     )    
     )
     val test_N:Int=test_X.length
@@ -504,18 +537,19 @@ def train_test_mnist() {
     val train_N: Int = train_X.length
     
     val rng: Random = new Random(123)
-    var learning_rate: Double = 0.05
-    val n_epochs: Int = 100
+    var learning_rate: Double = 0.1
+    val n_epochs: Int = 70
     
-    //val classifier = new  CNN(input_size=(height,width),output_size=10,n_kernel_Array=Array(6,16,120),kernel_size_Array=Array((5,5),(5,5),(4,4)),pool_size_Array=Array((2,2),(2,2),(1,1)),n_channel=1,n_hidden=100,rng=null,activation="sigmoid")
-    val classifier = new  CNN(input_size=(height,width),output_size=10,n_kernel_Array=Array(6,16,120),kernel_size_Array=Array((5,5),(5,5),(4,4)),pool_size_Array=Array((2,2),(2,2),(1,1)),n_channel=1,n_hidden=100,rng=null,activation="ReLU")
+    //val classifier = new  CNN(input_size=(height,width),output_size=10,n_kernel_Array=Array(6,16,120),kernel_size_Array=Array((5,5),(5,5),(4,4)),pool_size_Array=Array((2,2),(2,2),(1,1)),n_channel=1,n_hidden=84,rng=null,activation="ReLU",activation_mlp="ReLU")
+    //val classifier = new  CNN(input_size=(height,width),output_size=10,n_kernel_Array=Array(6,16,120),kernel_size_Array=Array((5,5),(5,5),(4,4)),pool_size_Array=Array((2,2),(2,2),(1,1)),n_channel=1,n_hidden=84,rng=null,activation="ReLU",activation_mlp="tanh")
+    val classifier = new  CNN(input_size=(height,width),output_size=10,n_kernel_Array=Array(100),kernel_size_Array=Array((9,9)),pool_size_Array=Array((2,2)),n_channel=1,n_hidden=84,rng=null,activation="ReLU",activation_mlp="tanh")
     
     // train
     var epoch: Int = 0
     for(epoch <- 0 until n_epochs) {
       print("epoch_"+epoch+":\n")
-      classifier.train_batch(inputs_x=train_X, inputs_y=train_Y, lr=learning_rate, batch_num_per=0.1, save_module_path="",debug=false)
-      learning_rate *=0.9
+      classifier.train_batch(inputs_x=train_X, inputs_y=train_Y, lr=learning_rate, batch_num_per=0.01, save_module_path="",debug=false)
+      //learning_rate *=0.99
     } 
     
     /*

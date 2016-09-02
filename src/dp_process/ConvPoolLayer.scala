@@ -48,6 +48,7 @@ class ConvLayer(input_size_in:(Int,Int),
   var activated_input:Array[Array[Array[Double]]]=Array.ofDim[Double](n_kernel,s0,s1)//activated_input=convolved_input经过activation_fun函数处理的输出  
   //用于反向传播
   var d_v:Array[Array[Array[Double]]]=Array.ofDim[Double](n_kernel,s0,s1)//网络的局部梯度  
+
   
   /*
    * 建立参数W和b
@@ -125,7 +126,7 @@ class ConvLayer(input_size_in:(Int,Int),
   def convolve_backward(x: Array[Array[Array[Double]]],
                           next_layer:Max_PoolLayer, 
                           lr: Double,
-                          batch_num:Int){
+                          batch_num:Int,alpha:Double=0.9){
     /*
      * 计算局部梯度
      */
@@ -138,51 +139,60 @@ class ConvLayer(input_size_in:(Int,Int),
       for(i <- 0 until next_layer.s0){ 
         //遍历经过某一个池化层后输出样本矩阵的高度
         for(j <- 0 until next_layer.s1){
-          d_v(k)(next_layer.max_index_x(k)(i)(j)._1)(next_layer.max_index_x(k)(i)(j)._2)=next_layer.d_v(k)(i)(j)
+          //参考 《CNN的反向求导及联系.pdf》中的问题2
+          d_v(k)(next_layer.max_index_x(k)(i)(j)._1)(next_layer.max_index_x(k)(i)(j)._2)=next_layer.d_v(k)(i)(j)*dactivation_fun(convolved_input(k)(next_layer.max_index_x(k)(i)(j)._1)(next_layer.max_index_x(k)(i)(j)._2))          
         }
       }
-      //d_v.foreach { x => print("d_v_i:\n");x.foreach { x => x.foreach { x => print(x+"\t") };print("\n") } }//debug
     }
-    
+
     /*
-     * 计算参数的更新大小    W_add  b_add
+     * 计算参数的更新大小    
      * */
     var W_add:Array[Array[Array[Array[Double]]]]=Array.ofDim[Double](n_kernel,n_channel,kernel_size._1, kernel_size._2)//W的更新大小
-    var b_add:Array[Double]=new Array[Double](n_kernel)//b的更新大小
+    var b_add:Array[Double]=new Array[Double](n_kernel)//b的更新大小    
     //遍历每个核(使用某一个核来卷积处理图像数据)
     for(k <- 0 until n_kernel){
       //遍历经过某一个核卷积后输出样本矩阵的长度
       for(i <- 0 until s0){ 
         //遍历经过某一个核卷积后输出样本矩阵的宽度
         for(j <- 0 until s1){
-          d_v(k)(i)(j)=d_v(k)(i)(j)*dactivation_fun(convolved_input(k)(i)(j))
           b_add(k) +=d_v(k)(i)(j)*1.0
-          //遍历每个channel(使用某个核来卷积处理每个channel数据)
           for(c <- 0 until n_channel){
             //遍历核内的长度
             for(s <- 0 until kernel_size._1){
               //遍历核内的高度
               for(t <- 0 until kernel_size._2){
-                W_add(k)(c)(s)(t) += d_v(k)(i)(j) * x(c)(i+s)(j+t)
+                //应该实现matlab的 rot180(convn(x,rot180(d_v),'valid')),
+                //d_v(k)(i)(j) * x(c)(i+s)(j+t)完成了convn(x,d_v,'valid')//实际就是卷积层的正向传播,参考convolve_forward的实现
+                //其中再把d_v(k)(i)(j)->d_v(k)((s0-1)-i)((s1-1)-j)实现了rot180(d_v)
+                //输出W_add(k)(c)(s)(t)->W_add(k)(c)((kernel_size._1-1)-s)((kernel_size._2-1)-t) 事先最后的rot180
+                W_add(k)(c)((kernel_size._1-1)-s)((kernel_size._2-1)-t) += x(c)(i+s)(j+t)*d_v(k)((s0-1)-i)((s1-1)-j) 
               }
             }
-          }
+          }          
         }
       }
     }
-    
+    /* debug
+    //x.foreach { x => print("x:\n");x.foreach { x => x.foreach { x => print(x+"\t") };print("\n") } }//debug
+    //d_v.foreach { x => print("d_v:\n");x.foreach { x => x.foreach { x => print(x+"\t") };print("\n") } }//debug
+    //print("W_add_0_0:\n")//debug
+    //W_add(0)(0).foreach { x => x.foreach { x => print(x+"\t") };print("\n") }//debug
+    */
     /*
      * 更新参数
      * */
     for(k <- 0 until n_kernel){
-      b(k) -= lr * b_add(k) / batch_num
+      //b(k) -= lr * b_add(k) / batch_num  //yusugomori?????????????????????
+      b(k) += lr * b_add(k) / batch_num
       //遍历每个channel(使用某个核来卷积处理每个channel数据)
       for(c <- 0 until n_channel){
         //遍历核内的长度
         for(s <- 0 until kernel_size._1){
           //遍历核内的高度
-          for(t <- 0 until kernel_size._2){     
-            W(k)(c)(s)(t) -= lr * W_add(k)(c)(s)(t) / batch_num
+          for(t <- 0 until kernel_size._2){  
+            //W(k)(c)(s)(t) -= lr * W_add(k)(c)(s)(t) / batch_num    //yusugomori?????????????
+            W(k)(c)(s)(t) += lr * W_add(k)(c)(s)(t) / batch_num
           }
         }
       }  
@@ -327,6 +337,7 @@ class Max_PoolLayer(input_size:(Int,Int),
           for(k <- 0 until next_layer.n_kernel){
             for(s <- 0 until next_layer.kernel_size._1){
               for(t <- 0 until next_layer.kernel_size._2){
+                //相当于MATLAB中的convn(next_layer.d_v,rot180(next_layer.W),'full'),即完成了2维的卷积运算
                 d_v(c)(tmp1+s)(tmp2+t) += next_layer.d_v(k)(tmp1)(tmp2) * next_layer.W(k)(c)(s)(t)
                 //由于是max 所以没有 *dactivation_fun(input)
               }
@@ -387,6 +398,7 @@ class Max_PoolLayer(input_size:(Int,Int),
       }
     }   
   }
+  
 }
 
 /*
@@ -575,6 +587,14 @@ pooled_input_i:
 0.8807970779778823	0.9820137900379085
  * */
     ConvPoolLayer_obj_test.Max_PoolLayer_obj.max_index_x.foreach { x => print("max_index_x_i:\n");x.foreach { x => x.foreach { x => print("("+x._1+","+x._2+")\t") } ;print("\n")}}
+/*
+ max_index_x_i:
+(0,0)	(0,2)	
+(3,0)	(3,2)	
+max_index_x_i:
+(0,0)	(1,2)	
+(3,0)	(3,2)	
+ */    
     
     //ok
     ////数据案例使用 《CNN的反向求导及联系.pdf》中的问题三
@@ -630,10 +650,11 @@ d_v_i:
 -0.5	0.4000000000000001	0.7000000000000001	
 0.3000000000000001	1.9000000000000006	1.9000000000000004	
 0.5	1.5	1.0	
+d_v_i=conv(nextlayer.d_v,rot180(nextlayer.w),'full')
  * */  
     
     //ok
-    //数据案例使用 《CNN的反向求导及联系.pdf》中的问题三
+    //数据案例使用 《CNN的反向求导及联系.pdf》中的问题2
     print("step4: test for ConvLayer backward:\n") 
     var ConvPoolLayer_obj_test3:ConvPoolLayer =new ConvPoolLayer(input_size_in=(7,7),
                                                                  n_kernel_in=1,
@@ -641,23 +662,53 @@ d_v_i:
                                                                  pool_size_in=(2,2),
                                                                  n_channel_in=1,
                                                                  activation="sigmoid")    
-    ConvPoolLayer_obj_test3.ConvLayer_obj.convolve_forward(x=Array.ofDim[Double](1,7,7))
+    ConvPoolLayer_obj_test3.ConvLayer_obj.convolve_forward(x=Array(Array(Array(1.0,2.0,3.0,4.0,5.0,6.0,7.0),
+                                                                         Array(1.0,2.0,3.0,4.0,5.0,6.0,7.0),
+                                                                         Array(1.0,2.0,3.0,4.0,5.0,6.0,7.0),
+                                                                         Array(1.0,2.0,3.0,4.0,5.0,6.0,7.0),
+                                                                         Array(1.0,2.0,3.0,4.0,5.0,6.0,7.0),
+                                                                         Array(1.0,2.0,3.0,4.0,5.0,6.0,7.0),
+                                                                         Array(1.0,2.0,3.0,4.0,5.0,6.0,7.0))))
     ConvPoolLayer_obj_test3.Max_PoolLayer_obj.maxpoollayer_forward(ConvPoolLayer_obj_test3.ConvLayer_obj.activated_input)
     ConvPoolLayer_obj_test3.Max_PoolLayer_obj.max_index_x(0)(0)(0)=(1,1)
     ConvPoolLayer_obj_test3.Max_PoolLayer_obj.max_index_x(0)(0)(1)=(0,3)
     ConvPoolLayer_obj_test3.Max_PoolLayer_obj.max_index_x(0)(1)(0)=(2,0)
     ConvPoolLayer_obj_test3.Max_PoolLayer_obj.max_index_x(0)(1)(1)=(3,2)
     ConvPoolLayer_obj_test3.Max_PoolLayer_obj.d_v=Array(Array(Array(1,3),Array(2,4)))
-    ConvPoolLayer_obj_test3.ConvLayer_obj.convolve_backward(x=Array.ofDim[Double](1,7,7), next_layer=ConvPoolLayer_obj_test3.Max_PoolLayer_obj, lr=0.1, batch_num=1)
-    //打开 ConvPoolLayer_obj_test3.ConvLayer_obj.convolve_backward 最下面的
-    //d_v.foreach { x => print("d_v_i:\n");x.foreach { x => x.foreach { x => print(x+"\t") };print("\n") } }//debug
+    ConvPoolLayer_obj_test3.ConvLayer_obj.convolve_backward(x=Array(Array(Array(1.0,2.0,3.0,4.0,5.0,6.0,7.0),
+                                                                         Array(1.0,2.0,3.0,4.0,5.0,6.0,7.0),
+                                                                         Array(1.0,2.0,3.0,4.0,5.0,6.0,7.0),
+                                                                         Array(1.0,2.0,3.0,4.0,5.0,6.0,7.0),
+                                                                         Array(1.0,2.0,3.0,4.0,5.0,6.0,7.0),
+                                                                         Array(1.0,2.0,3.0,4.0,5.0,6.0,7.0),
+                                                                         Array(1.0,2.0,3.0,4.0,5.0,6.0,7.0))),
+                                                             next_layer=ConvPoolLayer_obj_test3.Max_PoolLayer_obj, lr=0.1, batch_num=1)
+    //打开 ConvPoolLayer_obj_test3.ConvLayer_obj.convolve_backward 
+    //打开x.foreach { x => print("x:\n");x.foreach { x => x.foreach { x => print(x+"\t") };print("\n") } }//debug
+    //d_v.foreach { x => print("d_v:\n");x.foreach { x => x.foreach { x => print(x+"\t") };print("\n") } }//debug
+    //print("W_add_0_0:\n")//debug
+    //W_add(0)(0).foreach { x => x.foreach { x => print(x+"\t") };print("\n") }//debug
     /*
-d_v_i:
-0.0	0.0	0.0	3.0	
-0.0	1.0	0.0	0.0	
-2.0	0.0	0.0	0.0	
-0.0	0.0	4.0	0.0
-     * */
+x:
+1.0	2.0	3.0	4.0	5.0	6.0	7.0	
+1.0	2.0	3.0	4.0	5.0	6.0	7.0	
+1.0	2.0	3.0	4.0	5.0	6.0	7.0	
+1.0	2.0	3.0	4.0	5.0	6.0	7.0	
+1.0	2.0	3.0	4.0	5.0	6.0	7.0	
+1.0	2.0	3.0	4.0	5.0	6.0	7.0	
+1.0	2.0	3.0	4.0	5.0	6.0	7.0	
+d_v:
+0.0	0.0	0.0	-168.04927028385532	
+0.0	-26.265052184478442	0.0	0.0	
+-31.075304665281394	0.0	0.0	0.0	
+0.0	0.0	-159.03190353166173	0.0	
+W_add_0_0:
+-1842.4740445575703	-1458.0525138922935	-1073.6309832270167	-689.2094525617397	
+-1842.4740445575703	-1458.0525138922935	-1073.6309832270167	-689.2094525617397	
+-1842.4740445575703	-1458.0525138922935	-1073.6309832270167	-689.2094525617397	
+-1842.4740445575703	-1458.0525138922935	-1073.6309832270167	-689.2094525617397	
+W_add_0_0=rot180(convn(x,rot180(d_v)),'valid'))
+     * */    
     
   }   
   
