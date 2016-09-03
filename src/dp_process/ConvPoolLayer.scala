@@ -48,7 +48,8 @@ class ConvLayer(input_size_in:(Int,Int),
   var activated_input:Array[Array[Array[Double]]]=Array.ofDim[Double](n_kernel,s0,s1)//activated_input=convolved_input经过activation_fun函数处理的输出  
   //用于反向传播
   var d_v:Array[Array[Array[Double]]]=Array.ofDim[Double](n_kernel,s0,s1)//网络的局部梯度  
-
+  var W_add:Array[Array[Array[Array[Double]]]]=Array.ofDim[Double](n_kernel,n_channel,kernel_size._1, kernel_size._2)//W的更新大小
+  var b_add:Array[Double]=new Array[Double](n_kernel)//b的更新大小    
   
   /*
    * 建立参数W和b
@@ -148,15 +149,15 @@ class ConvLayer(input_size_in:(Int,Int),
     /*
      * 计算参数的更新大小    
      * */
-    var W_add:Array[Array[Array[Array[Double]]]]=Array.ofDim[Double](n_kernel,n_channel,kernel_size._1, kernel_size._2)//W的更新大小
-    var b_add:Array[Double]=new Array[Double](n_kernel)//b的更新大小    
+    var W_add_tmp:Array[Array[Array[Array[Double]]]]=Array.ofDim[Double](n_kernel,n_channel,kernel_size._1, kernel_size._2)//W的更新大小
+    var b_add_tmp:Array[Double]=new Array[Double](n_kernel)//b的更新大小    
     //遍历每个核(使用某一个核来卷积处理图像数据)
     for(k <- 0 until n_kernel){
       //遍历经过某一个核卷积后输出样本矩阵的长度
       for(i <- 0 until s0){ 
         //遍历经过某一个核卷积后输出样本矩阵的宽度
         for(j <- 0 until s1){
-          b_add(k) +=d_v(k)(i)(j)*1.0
+          b_add_tmp(k) +=d_v(k)(i)(j)*1.0
           for(c <- 0 until n_channel){
             //遍历核内的长度
             for(s <- 0 until kernel_size._1){
@@ -166,7 +167,7 @@ class ConvLayer(input_size_in:(Int,Int),
                 //d_v(k)(i)(j) * x(c)(i+s)(j+t)完成了convn(x,d_v,'valid')//实际就是卷积层的正向传播,参考convolve_forward的实现
                 //其中再把d_v(k)(i)(j)->d_v(k)((s0-1)-i)((s1-1)-j)实现了rot180(d_v)
                 //输出W_add(k)(c)(s)(t)->W_add(k)(c)((kernel_size._1-1)-s)((kernel_size._2-1)-t) 事先最后的rot180
-                W_add(k)(c)((kernel_size._1-1)-s)((kernel_size._2-1)-t) += x(c)(i+s)(j+t)*d_v(k)((s0-1)-i)((s1-1)-j) 
+                W_add_tmp(k)(c)((kernel_size._1-1)-s)((kernel_size._2-1)-t) += x(c)(i+s)(j+t)*d_v(k)((s0-1)-i)((s1-1)-j) 
               }
             }
           }          
@@ -174,17 +175,19 @@ class ConvLayer(input_size_in:(Int,Int),
       }
     }
     /* debug
-    //x.foreach { x => print("x:\n");x.foreach { x => x.foreach { x => print(x+"\t") };print("\n") } }//debug
-    //d_v.foreach { x => print("d_v:\n");x.foreach { x => x.foreach { x => print(x+"\t") };print("\n") } }//debug
-    //print("W_add_0_0:\n")//debug
-    //W_add(0)(0).foreach { x => x.foreach { x => print(x+"\t") };print("\n") }//debug
+    x.foreach { x => print("x:\n");x.foreach { x => x.foreach { x => print(x+"\t") };print("\n") } }//debug
+    d_v.foreach { x => print("d_v:\n");x.foreach { x => x.foreach { x => print(x+"\t") };print("\n") } }//debug
+    print("W_add_0_0:\n")//debug
+    W_add_tmp(0)(0).foreach { x => x.foreach { x => print(x+"\t") };print("\n") }//debug
     */
     /*
      * 更新参数
      * */
     for(k <- 0 until n_kernel){
       //b(k) -= lr * b_add(k) / batch_num  //yusugomori?????????????????????
-      b(k) += lr * b_add(k) / batch_num
+      //b_add(k) =lr *b_add_tmp(k)/batch_num//vision1
+      b_add(k) =alpha*b_add(k)+ (1-alpha)*lr *b_add_tmp(k)/batch_num//vision2
+      b(k) += b_add(k) 
       //遍历每个channel(使用某个核来卷积处理每个channel数据)
       for(c <- 0 until n_channel){
         //遍历核内的长度
@@ -192,7 +195,10 @@ class ConvLayer(input_size_in:(Int,Int),
           //遍历核内的高度
           for(t <- 0 until kernel_size._2){  
             //W(k)(c)(s)(t) -= lr * W_add(k)(c)(s)(t) / batch_num    //yusugomori?????????????
-            W(k)(c)(s)(t) += lr * W_add(k)(c)(s)(t) / batch_num
+            //W_add(k)(c)(s)(t)=lr*W_add_tmp(k)(c)(s)(t)/batch_num //vision1
+            W_add(k)(c)(s)(t)=alpha*W_add(k)(c)(s)(t)+(1-alpha)*lr*W_add_tmp(k)(c)(s)(t)/batch_num//vision2
+            W(k)(c)(s)(t) += W_add(k)(c)(s)(t)                  //使用加法是由于 logisticregression和hidden的都是加法,
+                                                                     //本质是输出层logisticregression的d_y(i) = y(i) - p_y_given_x_softmax(i)  如果是p_y_given_x_softmax(i)-y(i) 则统一为减法
           }
         }
       }  
@@ -359,7 +365,7 @@ class Max_PoolLayer(input_size:(Int,Int),
    * next_layer:下一层网络
    * */
   def maxpoollayer_backward_2(x: Array[Array[Array[Double]]],
-                              next_layer:HiddenLayer){ 
+                              next_layer:Dropout){ 
     
     /*
      * 计算局部梯度
@@ -382,9 +388,10 @@ class Max_PoolLayer(input_size:(Int,Int),
     //使用下一层的d_v累加计算出本层的d_v,但是是打平后的
     val flatten_size:Int=next_layer.n_in
     val d_v_flatten:Array[Double]=new Array(flatten_size)//内部为0.0 每次清零
+    val last_hidden_index:Int=next_layer.hidden_layers.length-1
     for(j <-0 until flatten_size){
-      for(i <-0 until next_layer.n_out){
-        d_v_flatten(j) = d_v_flatten(j) + next_layer.W(i)(j) * next_layer.d_v(i)
+      for(i <-0 until next_layer.hidden_layers(last_hidden_index).n_out){
+        d_v_flatten(j) = d_v_flatten(j) + next_layer.hidden_layers(last_hidden_index).W(i)(j) * next_layer.hidden_layers(last_hidden_index).d_v(i)
       }
     }
     //把打平后的d_v变为k,i,j
@@ -453,14 +460,14 @@ class ConvPoolLayer(input_size_in:(Int,Int),
     Max_PoolLayer_obj.maxpoollayer_forward(x=ConvLayer_obj.activated_input)
   }
   
-  def cnn_backward_1(x:Array[Array[Array[Double]]],next_layer:ConvPoolLayer, lr:Double,batch_num:Int)={
+  def cnn_backward_1(x:Array[Array[Array[Double]]],next_layer:ConvPoolLayer, lr:Double,batch_num:Int,alpha:Double=0.9)={
     Max_PoolLayer_obj.maxpoollayer_backward_1(x=ConvLayer_obj.activated_input,next_layer=next_layer.ConvLayer_obj)
-    ConvLayer_obj.convolve_backward(x=x, next_layer=Max_PoolLayer_obj, lr=lr, batch_num=batch_num)  
+    ConvLayer_obj.convolve_backward(x=x, next_layer=Max_PoolLayer_obj, lr=lr, batch_num=batch_num,alpha=alpha)  
   }
   
-  def cnn_backward_2(x:Array[Array[Array[Double]]],next_layer:HiddenLayer, lr:Double,batch_num:Int)={
+  def cnn_backward_2(x:Array[Array[Array[Double]]],next_layer:Dropout, lr:Double,batch_num:Int,alpha:Double=0.9)={
     Max_PoolLayer_obj.maxpoollayer_backward_2(x=ConvLayer_obj.activated_input,next_layer=next_layer)
-    ConvLayer_obj.convolve_backward(x=x, next_layer=Max_PoolLayer_obj, lr=lr, batch_num=batch_num)  
+    ConvLayer_obj.convolve_backward(x=x, next_layer=Max_PoolLayer_obj, lr=lr, batch_num=batch_num,alpha=alpha)  
   }
 }
 
@@ -682,7 +689,7 @@ d_v_i=conv(nextlayer.d_v,rot180(nextlayer.w),'full')
                                                                          Array(1.0,2.0,3.0,4.0,5.0,6.0,7.0),
                                                                          Array(1.0,2.0,3.0,4.0,5.0,6.0,7.0),
                                                                          Array(1.0,2.0,3.0,4.0,5.0,6.0,7.0))),
-                                                             next_layer=ConvPoolLayer_obj_test3.Max_PoolLayer_obj, lr=0.1, batch_num=1)
+                                                             next_layer=ConvPoolLayer_obj_test3.Max_PoolLayer_obj, lr=0.1, batch_num=1,alpha=0.0)
     //打开 ConvPoolLayer_obj_test3.ConvLayer_obj.convolve_backward 
     //打开x.foreach { x => print("x:\n");x.foreach { x => x.foreach { x => print(x+"\t") };print("\n") } }//debug
     //d_v.foreach { x => print("d_v:\n");x.foreach { x => x.foreach { x => print(x+"\t") };print("\n") } }//debug
@@ -698,15 +705,15 @@ x:
 1.0	2.0	3.0	4.0	5.0	6.0	7.0	
 1.0	2.0	3.0	4.0	5.0	6.0	7.0	
 d_v:
-0.0	0.0	0.0	-168.04927028385532	
-0.0	-26.265052184478442	0.0	0.0	
--31.075304665281394	0.0	0.0	0.0	
-0.0	0.0	-159.03190353166173	0.0	
+0.0	0.0	0.0	-104.49666567769285	
+0.0	-16.570779564884706	0.0	0.0	
+-19.85805972596852	0.0	0.0	0.0	
+0.0	0.0	-99.48737429897888	0.0	
 W_add_0_0:
--1842.4740445575703	-1458.0525138922935	-1073.6309832270167	-689.2094525617397	
--1842.4740445575703	-1458.0525138922935	-1073.6309832270167	-689.2094525617397	
--1842.4740445575703	-1458.0525138922935	-1073.6309832270167	-689.2094525617397	
--1842.4740445575703	-1458.0525138922935	-1073.6309832270167	-689.2094525617397	
+-1153.8546296767536	-913.4417504092287	-673.0288711417038	-432.6159918741788	
+-1153.8546296767536	-913.4417504092287	-673.0288711417038	-432.6159918741788	
+-1153.8546296767536	-913.4417504092287	-673.0288711417038	-432.6159918741788	
+-1153.8546296767536	-913.4417504092287	-673.0288711417038	-432.6159918741788	
 W_add_0_0=rot180(convn(x,rot180(d_v)),'valid'))
      * */    
     

@@ -53,14 +53,11 @@ class CNN(input_size:(Int,Int),
     }
   }
   
-  //建立输出层 
-  val hidden_layer=new HiddenLayer(n_in=ConvPoolLayer_layers(n_ConvPoolLayer-1).Max_PoolLayer_obj.pre_conv_layer_n_kernel*ConvPoolLayer_layers(n_ConvPoolLayer-1).Max_PoolLayer_obj.s0*ConvPoolLayer_layers(n_ConvPoolLayer-1).Max_PoolLayer_obj.s1,
-                                   n_out=n_hidden,
-                                   _W=null, 
-                                   _b=null, 
-                                   rng=null,
-                                   activation=activation_mlp)
-  val log_layer = new LogisticRegression(n_hidden,output_size)
+  //建立输出层  一成hidden+一层logistic
+  val mlp_layer = new Dropout(n_in=ConvPoolLayer_layers(n_ConvPoolLayer-1).Max_PoolLayer_obj.pre_conv_layer_n_kernel*ConvPoolLayer_layers(n_ConvPoolLayer-1).Max_PoolLayer_obj.s0*ConvPoolLayer_layers(n_ConvPoolLayer-1).Max_PoolLayer_obj.s1, 
+                              hidden_layer_sizes=Array(n_hidden),
+                              n_out=output_size,
+                              activation=activation_mlp)
   
   /*输入一个样本,并训练更新一下系数(更新时要除以batch_num)
     x:一个样本的x数据,据取值为[0,1]之间  样本是一个3维数据形式=n_channel*input_size(0)*input_size(1)
@@ -70,7 +67,7 @@ class CNN(input_size:(Int,Int),
                                                  即每一次迭代仅仅更新1/batch_num倍,如果batch_num=训练集样本个数,则当所有训练集都迭代一遍后则 为 W(t+1)=W(t)+lr*(局部误差)
                                                 如果batch_num=1则表示每个样本迭代一次 W(t+1)=W(t)+lr*(局部误差) 即不是批量迭代而是随机迭代了  
   */
-  def train(x: Array[Array[Array[Double]]],y:Array[Int], lr: Double,batch_num:Int,dropout:Boolean=true,debug:Boolean=false) { 
+  def train(x: Array[Array[Array[Double]]],y:Array[Int], lr: Double,batch_num:Int,dropout:Boolean=true,alpha:Double=0.9,debug:Boolean=false) { 
     /*
      * step1 forward ConvPoolLayer_layers
      */   
@@ -89,7 +86,13 @@ class CNN(input_size:(Int,Int),
      * step2 forward & backward log_layer
     */
     val layer_input_copy_one:Array[Double]=flatten(layer_input)//打平
-    val hidden_layer_out:Array[Double]=hidden_layer.forward(input=layer_input_copy_one)
+    mlp_layer.train(x=layer_input_copy_one,
+                    y=y,
+                    lr=lr,
+                    alpha=alpha, 
+                    batch_num=batch_num,
+                    dropout=true, 
+                    p_dropout=0.2)
     if(debug){
       def see_w_max_min(w_in:Array[Array[Array[Array[Double]]]],max_min:String):Double={
         var result:Double=0.0;
@@ -136,29 +139,21 @@ class CNN(input_size:(Int,Int),
         print("max convpoollayer_"+i+" d_v are:"+see_d_v_max_min(ConvPoolLayer_layers(i).ConvLayer_obj.d_v,"max")+"\n")
         print("min convpoollayer_"+i+" d_v are:"+see_d_v_max_min(ConvPoolLayer_layers(i).ConvLayer_obj.d_v,"min")+"\n")  
       }
-      print("max hidden_layer w:"+hidden_layer.W.reduce(_++_).reduce(math.max(_,_))+"\n");//debug
-      print("min hidden_layer w:"+hidden_layer.W.reduce(_++_).reduce(math.min(_,_))+"\n");//debug
-      //print("sum hidden_layer w:"+hidden_layer.W.reduce(_++_).reduce(_+_)+"\n");//debug
-      print("sum_per_out hidden_layer w:"+hidden_layer.W.reduce(_++_).reduce(_+_)/hidden_layer.n_out+"\n");//debug
-      print("max hidden_layer d_v:"+hidden_layer.d_v.reduce(math.max(_,_))+"\n");//debug
-      print("min hidden_layer d_v:"+hidden_layer.d_v.reduce(math.min(_,_))+"\n");//debug
-      print("max log_layer w:"+log_layer.W.reduce(_++_).reduce(math.max(_,_))+"\n");//debug
-      print("min log_layer w:"+log_layer.W.reduce(_++_).reduce(math.min(_,_))+"\n");//debug
-      //print("sum log_layer w:"+log_layer.W.reduce(_++_).reduce(_+_)+"\n");//debug   
-      print("sum_per_out log_layer w:"+log_layer.W.reduce(_++_).reduce(_+_)/log_layer.n_out+"\n");//debug     
-      print("max out:"+log_layer.predict(hidden_layer_out).reduce(math.max(_,_))+"\n");//debug
-      print("min out:"+log_layer.predict(hidden_layer_out).reduce(math.min(_,_))+"\n");//debug
-      print("max hidden_layer d_v:"+log_layer.d_y.reduce(math.max(_,_))+"\n");//debug
-      print("min hidden_layer d_v:"+log_layer.d_y.reduce(math.min(_,_))+"\n");//debug      
+      print("max hidden_layer w:"+mlp_layer.hidden_layers(0).W.reduce(_++_).reduce(math.max(_,_))+"\n");//debug
+      print("min hidden_layer w:"+mlp_layer.hidden_layers(0).W.reduce(_++_).reduce(math.min(_,_))+"\n");//debug
+      //print("sum hidden_layer w:"+mlp_layer.hidden_layers(0).W.reduce(_++_).reduce(_+_)+"\n");//debug
+      print("sum_per_out hidden_layer w:"+mlp_layer.hidden_layers(0).W.reduce(_++_).reduce(_+_)/mlp_layer.hidden_layers(0).n_out+"\n");//debug
+      print("max hidden_layer d_v:"+mlp_layer.hidden_layers(0).d_v.reduce(math.max(_,_))+"\n");//debug
+      print("min hidden_layer d_v:"+mlp_layer.hidden_layers(0).d_v.reduce(math.min(_,_))+"\n");//debug
+      print("max log_layer w:"+mlp_layer.log_layer.W.reduce(_++_).reduce(math.max(_,_))+"\n");//debug
+      print("min log_layer w:"+mlp_layer.log_layer.W.reduce(_++_).reduce(math.min(_,_))+"\n");//debug
+      //print("sum log_layer w:"+mlp_layer.log_layer.W.reduce(_++_).reduce(_+_)+"\n");//debug   
+      print("sum_per_out log_layer w:"+mlp_layer.log_layer.W.reduce(_++_).reduce(_+_)/mlp_layer.log_layer.n_out+"\n");//debug     
+      print("max out:"+mlp_layer.predict(layer_input_copy_one).reduce(math.max(_,_))+"\n");//debug
+      print("min out:"+mlp_layer.predict(layer_input_copy_one).reduce(math.min(_,_))+"\n");//debug
+      print("max hidden_layer d_v:"+mlp_layer.log_layer.d_y.reduce(math.max(_,_))+"\n");//debug
+      print("min hidden_layer d_v:"+mlp_layer.log_layer.d_y.reduce(math.min(_,_))+"\n");//debug      
     }    
-    log_layer.train(x=hidden_layer_out,y=y,lr=lr,batch_num=batch_num)
-    hidden_layer.backward_2(next_layer=log_layer, 
-                            input=layer_input_copy_one, 
-                            batch_num=batch_num, 
-                            lr=lr, 
-                            alpha=0.9, 
-                            dropout=false, 
-                            mask=Array())
     
     /*
      * step3 backward ConvPoolLayer_layers
@@ -166,10 +161,10 @@ class CNN(input_size:(Int,Int),
     for(i <- (0 until n_ConvPoolLayer).reverse){
       if (i == n_ConvPoolLayer-1){
         //下一层ConvPoolLayer_layers(i+1)是Hidden
-        ConvPoolLayer_layers(i).cnn_backward_2(next_layer=hidden_layer,x=layer_inputs(i),batch_num=batch_num,lr=lr)
+        ConvPoolLayer_layers(i).cnn_backward_2(next_layer=mlp_layer,x=layer_inputs(i),batch_num=batch_num,lr=lr,alpha=alpha)
       } else{
         //下一层ConvPoolLayer_layers(i+1)是ConvPoolLayer_layers
-        ConvPoolLayer_layers(i).cnn_backward_1(next_layer=ConvPoolLayer_layers(i+1),x=layer_inputs(i),batch_num=batch_num,lr=lr)
+        ConvPoolLayer_layers(i).cnn_backward_1(next_layer=ConvPoolLayer_layers(i+1),x=layer_inputs(i),batch_num=batch_num,lr=lr,alpha=alpha)
       }  
     }
   }
@@ -179,14 +174,14 @@ class CNN(input_size:(Int,Int),
     inputs_x 训练集输入x  是4维数组=样本个数*n_channel*input_size(0)*input_size(1)
     inputs_y 训练集输出y
    * */  
-  def train_batch(inputs_x: Array[Array[Array[Array[Double]]]], inputs_y: Array[Array[Int]],lr: Double,batch_num_per:Double=1.0,save_module_path:String="",debug:Boolean=false)={
+  def train_batch(inputs_x: Array[Array[Array[Array[Double]]]], inputs_y: Array[Array[Int]],lr: Double,batch_num_per:Double=1.0,alpha:Double=0.9,save_module_path:String="",debug:Boolean=false)={
     //抽取样本个数
     val batch_num:Int=if(batch_num_per==1.0){
       inputs_x.length
     }else{
       math.round((inputs_x.length*batch_num_per).toFloat)//每次批量训练样本数
     }
-    log_layer.cross_entropy_result=0.0//每次批量开始时,把上次的交叉信息嫡清零  
+    mlp_layer.log_layer.cross_entropy_result=0.0//每次批量开始时,把上次的交叉信息嫡清零  
     
     //完成一次批量训练
     val rng_epooch:Random=new Random()//每次生成一个种子
@@ -202,10 +197,10 @@ class CNN(input_size:(Int,Int),
       if(debug){
         print("\n")//debug
       }
-      train(x=inputs_x(i),y=inputs_y(i), lr=lr,batch_num=batch_num,debug=debug)
+      train(x=inputs_x(i),y=inputs_y(i), lr=lr,batch_num=batch_num,debug=debug,alpha=alpha)
     }
     //完成一批次训练后计算本批次的平均交叉嫡cross_entropy_result/batch_num (cross_entropy_result内部是累加的)
-    println("cross_entropy="+log_layer.cross_entropy_result/batch_num)    
+    println("cross_entropy="+mlp_layer.log_layer.cross_entropy_result/batch_num)    
     
     /*//保存第i层da的参数
     if(! (save_module_path=="")){
@@ -224,7 +219,7 @@ class CNN(input_size:(Int,Int),
     }
     
     val layer_input_copy_one=flatten(layer_input)//打平  
-    log_layer.predict(layer_input_copy_one)
+    mlp_layer.predict(layer_input_copy_one)
   }  
   
   
@@ -429,9 +424,8 @@ object CNN {
       Array(0, 0,1)     
     )
     val n_out:Int=3   
-    //val classifier = new  CNN(input_size=(6,9),output_size=n_out,n_kernel_Array=Array(20),kernel_size_Array=Array((3,4)),pool_size_Array=Array((2,3)),n_channel=2,n_hidden=20,rng=null,activation="ReLU",activation_mlp="tanh")
-    val classifier = new  CNN(input_size=(6,9),output_size=n_out,n_kernel_Array=Array(50),kernel_size_Array=Array((3,4)),pool_size_Array=Array((2,3)),n_channel=2,n_hidden=20,rng=null,activation="ReLU",activation_mlp="tanh")
-    val n_epochs:Int=500
+    val classifier = new  CNN(input_size=(6,9),output_size=n_out,n_kernel_Array=Array(20),kernel_size_Array=Array((3,4)),pool_size_Array=Array((2,3)),n_channel=2,n_hidden=20,rng=null,activation="ReLU",activation_mlp="tanh")
+    val n_epochs:Int=100
     val train_N:Int=train_Y.length
     var learning_rate:Double=0.1
     // train
@@ -439,8 +433,8 @@ object CNN {
     var i: Int = 0
     for(epoch <- 0 until n_epochs) {
       print("epoch_"+epoch+":\n")
-      classifier.train_batch(inputs_x=train_X, inputs_y=train_Y, lr=learning_rate, batch_num_per=1.0, save_module_path="",debug=false)
-      learning_rate *=0.95
+      classifier.train_batch(inputs_x=train_X, inputs_y=train_Y, lr=learning_rate, batch_num_per=1.0, alpha=0.9,save_module_path="",debug=false)
+      learning_rate *=0.9
     }
     
      // test data
@@ -515,6 +509,10 @@ object CNN {
    * Array(1, 0,0),
    * Array(0, 0,1),
    * Array(0, 1,0)
+   * 最后输出
+   * 0.97829 0.01306 0.00865 
+   * 0.00705 0.00958 0.98337 
+   * 0.01312 0.97459 0.01228 
    * */      
     }    
   }  
@@ -537,10 +535,9 @@ def train_test_mnist() {
     val train_N: Int = train_X.length
     
     val rng: Random = new Random(123)
-    var learning_rate: Double = 0.1
+    var learning_rate: Double = 0.01
     val n_epochs: Int = 70
     
-    //val classifier = new  CNN(input_size=(height,width),output_size=10,n_kernel_Array=Array(6,16,120),kernel_size_Array=Array((5,5),(5,5),(4,4)),pool_size_Array=Array((2,2),(2,2),(1,1)),n_channel=1,n_hidden=84,rng=null,activation="ReLU",activation_mlp="ReLU")
     //val classifier = new  CNN(input_size=(height,width),output_size=10,n_kernel_Array=Array(6,16,120),kernel_size_Array=Array((5,5),(5,5),(4,4)),pool_size_Array=Array((2,2),(2,2),(1,1)),n_channel=1,n_hidden=84,rng=null,activation="ReLU",activation_mlp="tanh")
     val classifier = new  CNN(input_size=(height,width),output_size=10,n_kernel_Array=Array(100),kernel_size_Array=Array((9,9)),pool_size_Array=Array((2,2)),n_channel=1,n_hidden=84,rng=null,activation="ReLU",activation_mlp="tanh")
     
@@ -548,8 +545,8 @@ def train_test_mnist() {
     var epoch: Int = 0
     for(epoch <- 0 until n_epochs) {
       print("epoch_"+epoch+":\n")
-      classifier.train_batch(inputs_x=train_X, inputs_y=train_Y, lr=learning_rate, batch_num_per=0.01, save_module_path="",debug=false)
-      //learning_rate *=0.99
+      classifier.train_batch(inputs_x=train_X, inputs_y=train_Y, lr=learning_rate, batch_num_per=0.01,alpha=0.9, save_module_path="",debug=false)
+      learning_rate *=0.99
     } 
     
     /*
@@ -603,7 +600,7 @@ def train_test_mnist() {
     
   }  
   def main(args: Array[String]) {
-    //test_CNN_simple()//----没有成功 可能是数据集太少????
+    //test_CNN_simple()//ok
     train_test_mnist()//--没成功
   }   
 }  
