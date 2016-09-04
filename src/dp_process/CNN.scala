@@ -424,16 +424,17 @@ object CNN {
       Array(0, 0,1)     
     )
     val n_out:Int=3   
-    val classifier = new  CNN(input_size=(6,9),output_size=n_out,n_kernel_Array=Array(20),kernel_size_Array=Array((3,4)),pool_size_Array=Array((2,3)),n_channel=2,n_hidden=20,rng=null,activation="ReLU",activation_mlp="tanh")
+    //val classifier = new  CNN(input_size=(6,9),output_size=n_out,n_kernel_Array=Array(20),kernel_size_Array=Array((3,4)),pool_size_Array=Array((2,3)),n_channel=2,n_hidden=20,rng=null,activation="ReLU",activation_mlp="tanh")             //n_epochs=100 alpha=0.9 learning_rate *=0.9  lr=0.1
+    val classifier = new  CNN(input_size=(6,9),output_size=n_out,n_kernel_Array=Array(20,10),kernel_size_Array=Array((3,4),(2,2)),pool_size_Array=Array((2,3),(1,1)),n_channel=2,n_hidden=20,rng=null,activation="ReLU",activation_mlp="tanh")//n_epochs=100 alpha=1.0 learning_rate *=0.9  lr=0.01
     val n_epochs:Int=100
     val train_N:Int=train_Y.length
-    var learning_rate:Double=0.1
+    var learning_rate:Double=0.01
     // train
     var epoch: Int = 0
     var i: Int = 0
     for(epoch <- 0 until n_epochs) {
       print("epoch_"+epoch+":\n")
-      classifier.train_batch(inputs_x=train_X, inputs_y=train_Y, lr=learning_rate, batch_num_per=1.0, alpha=0.9,save_module_path="",debug=false)
+      classifier.train_batch(inputs_x=train_X, inputs_y=train_Y, lr=learning_rate, batch_num_per=1.0, alpha=1.0,save_module_path="",debug=false)
       learning_rate *=0.9
     }
     
@@ -509,10 +510,14 @@ object CNN {
    * Array(1, 0,0),
    * Array(0, 0,1),
    * Array(0, 1,0)
-   * 最后输出
+   * 最后输出(1层)
    * 0.97829 0.01306 0.00865 
    * 0.00705 0.00958 0.98337 
    * 0.01312 0.97459 0.01228 
+   * 最后输出(2层)
+   * 1.00000 0.00000 0.00000 
+   * 0.06238 0.10856 0.82907 
+   * 0.00000 1.00000 0.00000 
    * */      
     }    
   }  
@@ -535,18 +540,18 @@ def train_test_mnist() {
     val train_N: Int = train_X.length
     
     val rng: Random = new Random(123)
-    var learning_rate: Double = 0.01
+    var learning_rate: Double = 0.001
     val n_epochs: Int = 70
     
-    //val classifier = new  CNN(input_size=(height,width),output_size=10,n_kernel_Array=Array(6,16,120),kernel_size_Array=Array((5,5),(5,5),(4,4)),pool_size_Array=Array((2,2),(2,2),(1,1)),n_channel=1,n_hidden=84,rng=null,activation="ReLU",activation_mlp="tanh")
-    val classifier = new  CNN(input_size=(height,width),output_size=10,n_kernel_Array=Array(100),kernel_size_Array=Array((9,9)),pool_size_Array=Array((2,2)),n_channel=1,n_hidden=84,rng=null,activation="ReLU",activation_mlp="tanh")
+    val classifier = new  CNN(input_size=(height,width),output_size=10,n_kernel_Array=Array(6,16,120),kernel_size_Array=Array((5,5),(5,5),(4,4)),pool_size_Array=Array((2,2),(2,2),(1,1)),n_channel=1,n_hidden=84,rng=null,activation="ReLU",activation_mlp="tanh")
+    //val classifier = new  CNN(input_size=(height,width),output_size=10,n_kernel_Array=Array(100),kernel_size_Array=Array((9,9)),pool_size_Array=Array((2,2)),n_channel=1,n_hidden=84,rng=null,activation="ReLU",activation_mlp="tanh")
     
     // train
     var epoch: Int = 0
     for(epoch <- 0 until n_epochs) {
       print("epoch_"+epoch+":\n")
-      classifier.train_batch(inputs_x=train_X, inputs_y=train_Y, lr=learning_rate, batch_num_per=0.01,alpha=0.9, save_module_path="",debug=false)
-      learning_rate *=0.99
+      classifier.train_batch(inputs_x=train_X, inputs_y=train_Y, lr=learning_rate, batch_num_per=0.01,alpha=1.0, save_module_path="",debug=false)
+      learning_rate *=0.9
     } 
     
     /*
