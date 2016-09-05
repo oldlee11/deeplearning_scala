@@ -127,7 +127,7 @@ class ConvLayer(input_size_in:(Int,Int),
   def convolve_backward(x: Array[Array[Array[Double]]],
                           next_layer:Max_PoolLayer, 
                           lr: Double,
-                          batch_num:Int,alpha:Double=0.9){
+                          batch_num:Int,alpha:Double=0.0){
     /*
      * 计算局部梯度
      */
@@ -433,8 +433,8 @@ class ConvPoolLayer(input_size_in:(Int,Int),
   //参考lisa lab和yusugomori
   val f_in_tmp:Int  = n_channel_in * kernel_size_in._1 * kernel_size_in._2
   val f_out_tmp:Int = (n_kernel_in * kernel_size_in._1 * kernel_size_in._2)/(pool_size_in._1*pool_size_in._2)
-  val init_a_tmp:Double=math.sqrt(6.0/(f_in_tmp + f_out_tmp))//初始化参数tmp  
-  //val init_a_tmp:Double=1/ math.pow(f_out_tmp,0.25)//debug
+  val init_a_tmp:Double=math.sqrt(6.0/(f_in_tmp + f_out_tmp))//simple  
+  //val init_a_tmp:Double=1/ math.pow(f_out_tmp,0.25)  
   val ConvLayer_obj:ConvLayer= new ConvLayer(input_size_in=input_size_in,
                                              n_kernel_in=n_kernel_in,
                                              kernel_size_in=kernel_size_in,
@@ -460,12 +460,12 @@ class ConvPoolLayer(input_size_in:(Int,Int),
     Max_PoolLayer_obj.maxpoollayer_forward(x=ConvLayer_obj.activated_input)
   }
   
-  def cnn_backward_1(x:Array[Array[Array[Double]]],next_layer:ConvPoolLayer, lr:Double,batch_num:Int,alpha:Double=0.9)={
+  def cnn_backward_1(x:Array[Array[Array[Double]]],next_layer:ConvPoolLayer, lr:Double,batch_num:Int,alpha:Double=0.0)={
     Max_PoolLayer_obj.maxpoollayer_backward_1(x=ConvLayer_obj.activated_input,next_layer=next_layer.ConvLayer_obj)
     ConvLayer_obj.convolve_backward(x=x, next_layer=Max_PoolLayer_obj, lr=lr, batch_num=batch_num,alpha=alpha)  
   }
   
-  def cnn_backward_2(x:Array[Array[Array[Double]]],next_layer:Dropout, lr:Double,batch_num:Int,alpha:Double=0.9)={
+  def cnn_backward_2(x:Array[Array[Array[Double]]],next_layer:Dropout, lr:Double,batch_num:Int,alpha:Double=0.0)={
     Max_PoolLayer_obj.maxpoollayer_backward_2(x=ConvLayer_obj.activated_input,next_layer=next_layer)
     ConvLayer_obj.convolve_backward(x=x, next_layer=Max_PoolLayer_obj, lr=lr, batch_num=batch_num,alpha=alpha)  
   }

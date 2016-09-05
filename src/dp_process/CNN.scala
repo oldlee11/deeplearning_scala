@@ -67,7 +67,7 @@ class CNN(input_size:(Int,Int),
                                                  即每一次迭代仅仅更新1/batch_num倍,如果batch_num=训练集样本个数,则当所有训练集都迭代一遍后则 为 W(t+1)=W(t)+lr*(局部误差)
                                                 如果batch_num=1则表示每个样本迭代一次 W(t+1)=W(t)+lr*(局部误差) 即不是批量迭代而是随机迭代了  
   */
-  def train(x: Array[Array[Array[Double]]],y:Array[Int], lr: Double,batch_num:Int,dropout:Boolean=true,alpha:Double=0.9,debug:Boolean=false) { 
+  def train(x: Array[Array[Array[Double]]],y:Array[Int], lr: Double,batch_num:Int,dropout:Boolean=true,alpha:Double=0.0,debug:Boolean=false) { 
     /*
      * step1 forward ConvPoolLayer_layers
      */   
@@ -174,7 +174,7 @@ class CNN(input_size:(Int,Int),
     inputs_x 训练集输入x  是4维数组=样本个数*n_channel*input_size(0)*input_size(1)
     inputs_y 训练集输出y
    * */  
-  def train_batch(inputs_x: Array[Array[Array[Array[Double]]]], inputs_y: Array[Array[Int]],lr: Double,batch_num_per:Double=1.0,alpha:Double=0.9,save_module_path:String="",debug:Boolean=false)={
+  def train_batch(inputs_x: Array[Array[Array[Array[Double]]]], inputs_y: Array[Array[Int]],lr: Double,batch_num_per:Double=1.0,alpha:Double=0.0,save_module_path:String="",debug:Boolean=false)={
     //抽取样本个数
     val batch_num:Int=if(batch_num_per==1.0){
       inputs_x.length
@@ -478,17 +478,18 @@ object CNN {
       Array(0, 0,1)     
     )
     val n_out:Int=3   
-    val classifier = new  CNN(input_size=(9,9),output_size=n_out,n_kernel_Array=Array(20,10),kernel_size_Array=Array((2,2),(3,3)),pool_size_Array=Array((2,2),(2,2)),n_channel=2,n_hidden=20,rng=null,activation="ReLU",activation_mlp="tanh")//n_epochs=100 alpha=1.0 learning_rate *=0.9  lr=0.01
-    val n_epochs:Int=100
+    val classifier = new  CNN(input_size=(9,9),output_size=n_out,n_kernel_Array=Array(20,10),kernel_size_Array=Array((2,2),(3,3)),pool_size_Array=Array((2,2),(2,2)),n_channel=2,n_hidden=20,rng=null,activation="ReLU",activation_mlp="tanh")//n_epochs=120 alpha=0.1 learning_rate *=0.99  lr=0.15
+                                                                                                                                                                                                                                              //val init_a_tmp:Double=math.sqrt(6.0/(f_in_tmp + f_out_tmp))
+    val n_epochs:Int=120
     val train_N:Int=train_Y.length
-    var learning_rate:Double=0.01
+    var learning_rate:Double=0.15
     // train
     var epoch: Int = 0
     var i: Int = 0
     for(epoch <- 0 until n_epochs) {
       print("epoch_"+epoch+":\n")
-      classifier.train_batch(inputs_x=train_X, inputs_y=train_Y, lr=learning_rate, batch_num_per=1.0, alpha=1.0,save_module_path="",debug=false)
-      learning_rate *=0.9
+      classifier.train_batch(inputs_x=train_X, inputs_y=train_Y, lr=learning_rate, batch_num_per=1.0, alpha=0.1,save_module_path="",debug=false)
+      learning_rate *=0.99
     }
     
      // test data
@@ -582,9 +583,9 @@ object CNN {
    * Array(0, 0,1),
    * Array(0, 1,0)
    * 最后输出(2层)
-   * 1.00000 0.00000 0.00000 
-   * 0.00017 0.00000 0.99983 
-   * 0.00079 0.99918 0.00003 
+0.85108 0.08675 0.06217 
+0.01937 0.01002 0.97061 
+0.06126 0.91315 0.02559 
    * */      
     }    
   }  
@@ -607,18 +608,18 @@ def train_test_mnist() {
     val train_N: Int = train_X.length
     
     val rng: Random = new Random(123)
-    var learning_rate: Double = 0.001
-    val n_epochs: Int = 70
+    var learning_rate: Double = 0.1
+    val n_epochs: Int = 150
     
+    //val classifier = new  CNN(input_size=(height,width),output_size=10,n_kernel_Array=Array(6,16,120),kernel_size_Array=Array((5,5),(5,5),(4,4)),pool_size_Array=Array((2,2),(2,2),(1,1)),n_channel=1,n_hidden=84,rng=null,activation="ReLU",activation_mlp="tanh")
     val classifier = new  CNN(input_size=(height,width),output_size=10,n_kernel_Array=Array(6,16,120),kernel_size_Array=Array((5,5),(5,5),(4,4)),pool_size_Array=Array((2,2),(2,2),(1,1)),n_channel=1,n_hidden=84,rng=null,activation="ReLU",activation_mlp="tanh")
-    //val classifier = new  CNN(input_size=(height,width),output_size=10,n_kernel_Array=Array(100),kernel_size_Array=Array((9,9)),pool_size_Array=Array((2,2)),n_channel=1,n_hidden=84,rng=null,activation="ReLU",activation_mlp="tanh")
     
     // train
     var epoch: Int = 0
     for(epoch <- 0 until n_epochs) {
       print("epoch_"+epoch+":\n")
-      classifier.train_batch(inputs_x=train_X, inputs_y=train_Y, lr=learning_rate, batch_num_per=0.01,alpha=1.0, save_module_path="",debug=false)
-      learning_rate *=0.9
+      classifier.train_batch(inputs_x=train_X, inputs_y=train_Y, lr=learning_rate, batch_num_per=0.01,alpha=0.0, save_module_path="",debug=false)
+      learning_rate *=0.95
     } 
     
     /*
@@ -626,7 +627,7 @@ def train_test_mnist() {
      * */
     val filePath_test:String="D:/youku_work/python/spark_python_scala/scala/workpace/deeplearning/dataset/mnist/test_data.txt"  
     val test_X:Array[Array[Array[Array[Double]]]]=dp_utils.dataset.load_mnist(filePath_test).map(x=>{val tmp:Array[Array[Double]]=Array.ofDim[Double](height,width);for(i <- 0 until height){for(j <-0 until width){tmp(i)(j)=x._2(i*width+j)}};Array(tmp)})
-    val test_N: Int = test_X.length
+    val test_N: Int = test_X.length//debug
     val test_Y_pred: Array[Array[Double]] = Array.ofDim[Double](test_N, 10)
     val test_Y: Array[Array[Int]]=dp_utils.dataset.load_mnist(filePath_test).map(x=>trans_int_to_bin(x._1))
     
