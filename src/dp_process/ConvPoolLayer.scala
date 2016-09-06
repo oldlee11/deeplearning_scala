@@ -343,9 +343,20 @@ class Max_PoolLayer(input_size:(Int,Int),
           for(k <- 0 until next_layer.n_kernel){
             for(s <- 0 until next_layer.kernel_size._1){
               for(t <- 0 until next_layer.kernel_size._2){
+                /* vision 1
                 //相当于MATLAB中的convn(next_layer.d_v,rot180(next_layer.W),'full'),即完成了2维的卷积运算
                 d_v(c)(tmp1+s)(tmp2+t) += next_layer.d_v(k)(tmp1)(tmp2) * next_layer.W(k)(c)(s)(t)
                 //由于是max 所以没有 *dactivation_fun(input)
+                */
+                
+                /* vision 2*/
+                //相当于MATLAB中的convn(next_layer.d_v,rot180(next_layer.W),'full'),即完成了2维的卷积运算
+                //其中 d_v(c)(tmp1+s)(tmp2+t) += next_layer.d_v(k)(tmp1)(tmp2) * next_layer.W(k)(c)(s)(t) 实现了convn(next_layer.d_v,next_layer.W,'full')
+                //把next_layer.W(k)(c)(s)(t)换为next_layer.W(k)(c)((next_layer.kernel_size._1-1)-s)((next_layer.kernel_size._2-1)-t) 实现了rot180
+                //d_v(c)(tmp1+s)(tmp2+t) += next_layer.d_v(k)(tmp1)(tmp2) * next_layer.W(k)(c)(s)(t) 
+                d_v(c)(tmp1+s)(tmp2+t) += next_layer.d_v(k)(tmp1)(tmp2) * next_layer.W(k)(c)((next_layer.kernel_size._1-1)-s)((next_layer.kernel_size._2-1)-t)
+                //由于是max 所以没有 *dactivation_fun(input) 
+                
               }
             }
           }  
@@ -433,8 +444,8 @@ class ConvPoolLayer(input_size_in:(Int,Int),
   //参考lisa lab和yusugomori
   val f_in_tmp:Int  = n_channel_in * kernel_size_in._1 * kernel_size_in._2
   val f_out_tmp:Int = (n_kernel_in * kernel_size_in._1 * kernel_size_in._2)/(pool_size_in._1*pool_size_in._2)
-  val init_a_tmp:Double=math.sqrt(6.0/(f_in_tmp + f_out_tmp))//cnn simple  
-  //val init_a_tmp:Double=1/ math.pow(f_out_tmp,0.25)  
+  //val init_a_tmp:Double=math.sqrt(6.0/(f_in_tmp + f_out_tmp)) 
+  val init_a_tmp:Double=1/ math.pow(f_out_tmp,0.25)  //cnn simple
   val ConvLayer_obj:ConvLayer= new ConvLayer(input_size_in=input_size_in,
                                              n_kernel_in=n_kernel_in,
                                              kernel_size_in=kernel_size_in,
@@ -606,6 +617,7 @@ max_index_x_i:
     //ok
     ////数据案例使用 《CNN的反向求导及联系.pdf》中的问题三
     print("step3: test for Max_PoolLayer backward_1(maxpool的下一层是卷积层conv) :\n")
+    /* vision 1
     var init_w_2:Array[Array[Array[Array[Double]]]]=Array(
         Array(
             Array(
@@ -619,7 +631,23 @@ max_index_x_i:
                 Array(0.1,0.2)
             )             
         )
-    )
+    )*/
+    
+    /* vision 2 */
+    var init_w_2:Array[Array[Array[Array[Double]]]]=Array(
+        Array(
+            Array(
+                Array(0.4,0.2), 
+                Array(0.2,0.1)
+            )            
+        ),
+        Array(
+            Array(
+                Array(0.2,0.1), 
+                Array(0.1,-0.3)
+            )             
+        )
+    )     
     var ConvPoolLayer_obj_test_2_next:ConvPoolLayer =new ConvPoolLayer(input_size_in=(3,3),
                                                                 n_kernel_in=2,
                                                                 kernel_size_in=(2,2),
@@ -637,6 +665,7 @@ max_index_x_i:
            Array(1,1)
         )
     )
+       
     ConvPoolLayer_obj_test_2_next.ConvLayer_obj.d_v=init_d_v_2
     var ConvPoolLayer_obj_test_2:ConvPoolLayer =new ConvPoolLayer(input_size_in=(10,10),
                                                                 n_kernel_in=1,

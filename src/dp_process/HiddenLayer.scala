@@ -79,7 +79,7 @@ class HiddenLayer(val n_in: Int, val n_out: Int, _W: Array[Array[Double]], _b: A
     var j: Int = 0
     //val a: Double = 1 / n_in   //方案1 见yusugomori----未成功
     val a: Double = 4 * math.sqrt(6.0/(n_in + n_out))         //方案2 见lisa DeepLearningTutorials-master----对minst的sda和dbn很成功;train_test_mnist的单层
-    //val a: Double =1/ math.pow(n_out,0.25)//用于dropout的两个实验ok  cnn simple ok----relu,rl=0.1  learning_rate *=0.9  50times
+    //val a: Double =1/ math.pow(n_out,0.25)//用于dropout的两个实验ok  ok----relu,rl=0.1  learning_rate *=0.9  50times
     //(a^2/3)*m^0.5=1/9-->(a^4/9)*m=1/9-->a=1/m^0.25
     for(i <- 0 until n_out) 
       for(j <- 0 until n_in) 
