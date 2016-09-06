@@ -186,7 +186,7 @@ class ConvLayer(input_size_in:(Int,Int),
     for(k <- 0 until n_kernel){
       //b(k) -= lr * b_add(k) / batch_num  //yusugomori?????????????????????
       //b_add(k) =lr *b_add_tmp(k)/batch_num//vision1
-      b_add(k) =alpha*b_add(k)+ (1-alpha)*lr *b_add_tmp(k)/batch_num//vision2
+      b_add(k) =alpha*b_add(k)+ lr *b_add_tmp(k)/batch_num//vision2
       b(k) += b_add(k) 
       //遍历每个channel(使用某个核来卷积处理每个channel数据)
       for(c <- 0 until n_channel){
@@ -196,8 +196,8 @@ class ConvLayer(input_size_in:(Int,Int),
           for(t <- 0 until kernel_size._2){  
             //W(k)(c)(s)(t) -= lr * W_add(k)(c)(s)(t) / batch_num    //yusugomori?????????????
             //W_add(k)(c)(s)(t)=lr*W_add_tmp(k)(c)(s)(t)/batch_num //vision1
-            W_add(k)(c)(s)(t)=alpha*W_add(k)(c)(s)(t)+(1-alpha)*lr*W_add_tmp(k)(c)(s)(t)/batch_num//vision2
-            W(k)(c)(s)(t) += W_add(k)(c)(s)(t)                  //使用加法是由于 logisticregression和hidden的都是加法,
+            W_add(k)(c)(s)(t)=alpha*W_add(k)(c)(s)(t)+lr*W_add_tmp(k)(c)(s)(t)/batch_num//vision2
+            W(k)(c)(s)(t) += W_add(k)(c)(s)(t)                       //使用加法是由于 logisticregression和hidden的都是加法,
                                                                      //本质是输出层logisticregression的d_y(i) = y(i) - p_y_given_x_softmax(i)  如果是p_y_given_x_softmax(i)-y(i) 则统一为减法
           }
         }
@@ -433,7 +433,7 @@ class ConvPoolLayer(input_size_in:(Int,Int),
   //参考lisa lab和yusugomori
   val f_in_tmp:Int  = n_channel_in * kernel_size_in._1 * kernel_size_in._2
   val f_out_tmp:Int = (n_kernel_in * kernel_size_in._1 * kernel_size_in._2)/(pool_size_in._1*pool_size_in._2)
-  val init_a_tmp:Double=math.sqrt(6.0/(f_in_tmp + f_out_tmp))//simple  
+  val init_a_tmp:Double=math.sqrt(6.0/(f_in_tmp + f_out_tmp))//cnn simple  
   //val init_a_tmp:Double=1/ math.pow(f_out_tmp,0.25)  
   val ConvLayer_obj:ConvLayer= new ConvLayer(input_size_in=input_size_in,
                                              n_kernel_in=n_kernel_in,
