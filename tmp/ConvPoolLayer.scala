@@ -1,6 +1,7 @@
 package dp_process
 
 import scala.util.Random
+import scala.collection.mutable.ArrayBuffer    //用于建立可变的array
 import scala.math
 
 import java.io.File; 
@@ -168,6 +169,7 @@ class ConvLayer(input_size_in:(Int,Int),
                 //其中再把d_v(k)(i)(j)->d_v(k)((s0-1)-i)((s1-1)-j)实现了rot180(d_v)
                 //输出W_add(k)(c)(s)(t)->W_add(k)(c)((kernel_size._1-1)-s)((kernel_size._2-1)-t) 事先最后的rot180
                 W_add_tmp(k)(c)((kernel_size._1-1)-s)((kernel_size._2-1)-t) += x(c)(i+s)(j+t)*d_v(k)((s0-1)-i)((s1-1)-j) 
+                //W_add_tmp(k)(c)((kernel_size._1-1)-s)((kernel_size._2-1)-t) += x(c)(i+s)(j+t)*d_v(k)(i)(j) 
               }
             }
           }          
@@ -237,17 +239,27 @@ class ConvLayer(input_size_in:(Int,Int),
       }
     }  
     
+    
+    
   /*
-   * pretrain 预处理
-   * 
+   * 用于 pretrain 预处理(da方法)
+   * 模拟 dA
    * */
   var cross_entropy_result:Double=0.0
   var vbias:Array[Double]=new Array[Double](n_channel)
   //使用交叉信息嫡cross-entropy衡量样本输入和经过编解码后输出的相近程度
   //值在>=0 当为0时 表示距离接近
   //每次批量迭代后该值越来越小
-  def cross_entropy(x: Array[Double], z: Array[Double]):Double={
-   -1.0* (0 until x.length).map(i=>x(i)*math.log(z(i))+(1-x(i))*math.log(1-z(i))).reduce(_+_)
+  def cross_entropy(x: Array[Array[Array[Double]]], z:  Array[Array[Array[Double]]]):Double={
+    var result:Double=0.0
+    for(i <-0 until x.length){
+      for(j <-0 until x(0).length){
+        for(k <-0 until x(0)(0).length){
+          result += x(i)(j)(k)*math.log(z(i)(j)(k))+(1-x(i)(j)(k))*math.log(1-z(i)(j)(k))
+        }
+      }  
+    }
+   -1.0 * result
   }  
   //定义二项分布的随机数产生函数
   //n是二项分布数据的个数,例如=100个
@@ -281,30 +293,21 @@ class ConvLayer(input_size_in:(Int,Int),
         }
       }
   }
-  // Encode 编码过程：v-->h  等于向前传播convolve_forward
+  // Encode 编码过程：v-->h  代码几乎等于向前传播convolve_forward
   // 把可视层(v)内的单元的值 经过v->h连接的系数W加权求和并加上隐藏层单元的偏置,最后经过sigmoid映射为[0,1]数值=隐藏层(h)内每个单元的数值=y
   def get_hidden_values(x: Array[Array[Array[Double]]], y: Array[Array[Array[Double]]]) {
-    var tmp:Array[Array[Array[Double]]]=Array.ofDim[Double](n_kernel,s0,s1)
-    //最后输出每个核对图片数据的卷积处理后的数据=n_kernel*s0*s1
-    //遍历每个核(使用某一个核来卷积处理图像数据)
+    val tmp:Array[Array[Array[Double]]]=Array.ofDim[Double](y.length,y(0).length,y(0)(0).length)
     for(k <- 0 until n_kernel){
-      //遍历经过某一个核卷积后输出样本矩阵的长度
       for(i <- 0 until s0){ 
-        //遍历经过某一个核卷积后输出样本矩阵的宽度
         for(j <- 0 until s1){
-          //遍历每个channel(使用某个核来卷积处理每个channel数据)
           for(c <- 0 until n_channel){
-            //遍历核内的长度
             for(s <- 0 until kernel_size._1){
-              //遍历核内的高度
               for(t <- 0 until kernel_size._2){
-                //做卷积运算  核内的元素和输入样本x的元素对应xiangcheng后计算求和
                 tmp(k)(i)(j) += W(k)(c)(s)(t) * x(c)(i+s)(j+t)
               }
             }
           }
           tmp(k)(i)(j)=tmp(k)(i)(j) + b(k)
-          //对每个输出经过activation_fun处理
           y(k)(i)(j) = utils.sigmoid(tmp(k)(i)(j))
         }
       }
@@ -339,24 +342,130 @@ class ConvLayer(input_size_in:(Int,Int),
         }
       }
     }
-  }  
+  } 
   //pretrain 预处理  da 方式
   def pre_train_da(x: Array[Array[Array[Double]]], lr: Double, corruption_level: Double,batch_num:Int){
       var tilde_x: Array[Array[Array[Double]]] = Array.ofDim[Double](x.length,x(0).length,x(0)(0).length)//经过加噪音处理后的x输入
       var y: Array[Array[Array[Double]]] = Array.ofDim[Double](n_kernel,s0,s1) //编码后的数据
       var z: Array[Array[Array[Double]]] = Array.ofDim[Double](x.length,x(0).length,x(0)(0).length) //解码后的数据     
-      
       val p: Double = 1 - corruption_level
-      
       //  x--->加噪音--->tilde_x
       get_corrupted_input(x, tilde_x, p)
       // tilde_x----->编码---->y---->解码---->z
       get_hidden_values(tilde_x,y)//完成一次编码,输出=y
       get_reconstructed_input(y, z)//完成一次解码,输出=z
-      cross_entropy_result += cross_entropy(x,z)//衡量输入和经过编解码后的输出数据之间的相似度(使用KL散度,即相对信息嫡)      
+      cross_entropy_result += cross_entropy(x,z)//衡量输入和经过编解码后的输出数据之间的相似度(使用KL散度,即相对信息嫡) 
+      /* vbias迭代 */
+      val L_vbias: Array[Array[Array[Double]]] = Array.ofDim[Double](x.length,x(0).length,x(0)(0).length)//x和z的误差
+      for(i<- 0 until x.length){
+        for(j<- 0 until x(0).length){
+          for(k<- 0 until x(0)(0).length){
+            L_vbias(i)(j)(k)=x(i)(j)(k)-z(i)(j)(k)
+            vbias(i) += lr * L_vbias(i)(j)(k)/batch_num
+          }
+        }
+      }
+      /* b迭代 */
+      val L_hbias:Array[Array[Array[Double]]] = Array.ofDim[Double](y.length,y(0).length,y(0)(0).length)
+      for(k <- 0 until n_kernel){
+        for(i <- 0 until s0){ 
+          for(j <- 0 until s1){
+            for(c <- 0 until n_channel){
+              for(s <- 0 until kernel_size._1){
+                for(t <- 0 until kernel_size._2){
+                  L_hbias(k)(i)(j) += W(k)(c)(s)(t) * L_vbias(c)(i+s)(j+t)
+                }
+              }
+            }
+            L_hbias(k)(i)(j) *=utils.dsigmoid(y(k)(i)(j))
+            b(k) += lr * L_hbias(k)(i)(j) / batch_num
+          }
+        }
+      }      
+      /* W迭代 */
+      for(k <- 0 until n_kernel){
+        for(i <- 0 until s0){ 
+          for(j <- 0 until s1){
+            for(c <- 0 until n_channel){
+              for(s <- 0 until kernel_size._1){
+                for(t <- 0 until kernel_size._2){
+                  W(k)(c)(s)(t) += lr* (L_hbias(k)(i)(j)*tilde_x(c)(i+s)(j+t)+L_vbias(c)(i+s)(j+t)*y(k)(i)(j))/batch_num
+                }
+              }
+            }
+          }
+        }
+      }      
   }
+  def pre_train_da_batch(inputs: Array[Array[Array[Array[Double]]]], lr: Double, corruption_level: Double,batch_num_per:Double):Unit={
+    //抽取样本个数
+    val batch_num:Int=if(batch_num_per==1.0){
+      inputs.length
+    }else{
+      math.round((inputs.length*batch_num_per).toFloat)//每次批量训练样本数
+    }
+    cross_entropy_result=0.0//每次批量开始时,把上次的交叉信息嫡清零  
     
-}
+    //完成一次批量训练
+    val rng_epooch:Random=new Random()//每次生成一个种子
+    val rng_index:ArrayBuffer[Int]=ArrayBuffer();
+    if(batch_num_per==1.0){
+      for(i <- 0 to (batch_num-1)) rng_index += i//抽样样本的角标 
+    }else{
+      for(i <- 0 to (batch_num-1)) rng_index += math.round((rng_epooch.nextDouble()*(inputs.length-1)).toFloat)//抽样样本的角标        
+    }
+    //正式训练一批次的样本
+    for(i <- rng_index) {
+      //根据一个样本完成一次训练,迭代增量取 1/batch_num
+      pre_train_da(inputs(i), lr,corruption_level,batch_num)
+    }
+    //完成一批次训练后计算本批次的平均交叉嫡cross_entropy_result/batch_num (cross_entropy_result内部是累加的)
+    println("cross_entropy="+cross_entropy_result/batch_num) 
+  }
+  //记录系数
+  def save_w(file_module_in:String):Unit={
+   val writer_module = new PrintWriter(new File(file_module_in)) 
+   //write b
+   writer_module.write(b.mkString(sep=","))  
+   writer_module.write("\n")
+   //write w
+   for(i<-0 until W.length){
+     for(j<-0 until W(0).length){
+       for(k<-0 until W(0)(0).length){
+         writer_module.write(W(i)(j)(k).mkString(sep=","))
+         writer_module.write("\n")         
+       }
+     }
+   }
+   writer_module.close()
+  }
+  //读取 save_w输出的模型txt
+  //并修改dA的W    vbias    hbias
+  def read_w_module(file_module_in:String):Unit={
+    var result:ArrayBuffer[String]=ArrayBuffer();
+    var tmp:Array[Double]=Array()
+    Source.fromFile(file_module_in).getLines().foreach(line=>result+=line) 
+    b=result(0).split(",").map(x=>x.toDouble)
+    for(i<-0 until W.length){
+      for(j<-0 until W(0).length){
+        for(k <- 0 until W(0)(0).length){
+          tmp=result(1+i*W(0).length*W(0)(0).length+j*W(0)(0).length).split(",").map(x=>x.toDouble) 
+          for(m<-0 until W(0)(0)(0).length){
+            W(i)(j)(k)(m)=tmp(m)  
+          }
+        }
+      }
+    }
+  }
+  //不训练,直接经过编码和解码过程
+  def reconstruct(x: Array[Array[Array[Double]]], z: Array[Array[Array[Double]]]) {
+    val y: Array[Array[Array[Double]]] = Array.ofDim[Double](n_kernel,s0,s1)
+    get_hidden_values(x, y)
+    get_reconstructed_input(y,z)
+  }
+}  
+
+
 
 //池化层
 /*
@@ -864,7 +973,47 @@ W_add_0_0:
 -1153.8546296767536	-913.4417504092287	-673.0288711417038	-432.6159918741788	
 W_add_0_0=rot180(convn(x,rot180(d_v)),'valid'))
      * */    
+                                                             
+    //pre_train与训练
+    //使用mnist数据集进行训练
+    val filePath_train:String="D:/youku_work/python/spark_python_scala/scala/workpace/deeplearning/dataset/mnist/valid_data.txt"//train数据量大,暂时使用valid数据
+    val width:Int=28;
+    val height:Int=28;//debug 28*28
+    val train_X:Array[Array[Array[Array[Double]]]]=dp_utils.dataset.load_mnist(filePath_train).map(x=>{val tmp:Array[Array[Double]]=Array.ofDim[Double](height,width);for(i <- 0 until height){for(j <-0 until width){tmp(i)(j)=x._2(i*width+j)}};Array(tmp)})
+
+    def trans_int_to_bin(int_in:Int):Array[Int]={
+      val result:Array[Int]=Array(0,0,0,0,0,0,0,0,0,0);
+      result(int_in)=1
+      result
+    }
+    val train_Y:Array[Array[Int]]=dp_utils.dataset.load_mnist(filePath_train).map(x=>trans_int_to_bin(x._1))
+    val train_N: Int = train_X.length
     
+    val rng: Random = new Random(123)
+    var learning_rate: Double = 0.1
+    val n_epochs: Int = 200
+    val convpool_obj: ConvPoolLayer = new ConvPoolLayer(input_size_in=(height,width),
+                                                 n_kernel_in=50,
+                                                 kernel_size_in=(5,5),
+                                                 pool_size_in=(2,2),
+                                                 _W=null,
+                                                 _b=null,
+                                                 n_channel_in=1,
+                                                 rng=null,
+                                                 activation="ReLU")
+
+    // train
+    var epoch: Int = 0
+    //批量训练 training_epochs次
+    for(epoch <- 0 until n_epochs) {
+      println("第"+epoch+"次迭代:")
+      convpool_obj.ConvLayer_obj.pre_train_da_batch(train_X, learning_rate, 0.1, 0.01)
+      if(epoch==(n_epochs-1) || epoch==math.round(n_epochs.toDouble/4.0) || epoch==math.round(2.0*n_epochs.toDouble/4.0) || epoch==math.round(3.0*n_epochs.toDouble/4.0)){
+        //记录权值w
+        convpool_obj.ConvLayer_obj.save_w("D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//module_out//Conv_mnist_module"+epoch+".txt")
+      }
+    } 
+                                                             
   }   
   
 }
