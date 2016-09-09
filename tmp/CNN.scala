@@ -762,14 +762,14 @@ def train_mnist_aft_pretrain() {
     for(i<-0 until classifier.n_ConvPoolLayer){
       classifier.ConvPoolLayer_layers(i).ConvLayer_obj.read_w_module("D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//module_out//cnn_mnist_module_da"+i+".txt")
     }
-    classifier.mlp_layer.hidden_layers(0).read_w_module_from_da_rbm("cnn_mnist_module_mlp.txt")
+    classifier.mlp_layer.hidden_layers(0).read_w_module_from_da_rbm("D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//module_out//cnn_mnist_module_mlp.txt")
     
     // train
     var epoch: Int = 0
     for(epoch <- 0 until n_epochs) {
       print("epoch_"+epoch+":\n")
       classifier.train_batch(inputs_x=train_X, inputs_y=train_Y, lr=learning_rate, batch_num_per=0.01,alpha=0.0, save_module_path="",debug=false)
-      learning_rate *=0.99
+      //learning_rate *=0.99
     } 
     
     /*
@@ -913,7 +913,7 @@ def train_test_mnist() {
   def main(args: Array[String]) {
     //test_CNN_simple()//ok
     //train_test_mnist()//--没成功
-    pre_train_mnist()
-    //train_mnist_aft_pretrain()
+    //pre_train_mnist()
+    train_mnist_aft_pretrain()
   }   
 }  
