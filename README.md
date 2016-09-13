@@ -7,5 +7,5 @@ do labs with minst dataset
 
     sdA:88.17%,DBN:88.7%,CNN(lenet5):90.3%
 
-refer to https://github.com/yusugomori/DeepLearning
+
 
