@@ -1,6 +1,7 @@
 package dp_process
 
 import scala.util.Random
+import scala.collection.mutable.ArrayBuffer    //用于建立可变的array
 import scala.math
 
 import java.io.File; 
@@ -26,10 +27,10 @@ class ConvLayer(input_size_in:(Int,Int),
                 _W:Array[Array[Array[Array[Double]]]]=null,
                 _b:Array[Double]=null,
                 n_channel_in:Int=3,
-                var rng: Random=null,
+                _rng: Random=null,
                 activation:String="ReLU") {
   
-  if(rng == null) rng = new Random(1234) 
+  var rng:Random=if(_rng == null) new Random(1234) else _rng
   
   /*
    * 其它全局变量
@@ -235,6 +236,42 @@ class ConvLayer(input_size_in:(Int,Int),
         0.0
       }
     }  
+
+  //记录系数
+  def save_w(file_module_in:String):Unit={
+   val writer_module = new PrintWriter(new File(file_module_in)) 
+   //write b
+   writer_module.write(b.mkString(sep=","))  
+   writer_module.write("\n")
+   //write w
+   for(i<-0 until W.length){
+     for(j<-0 until W(0).length){
+       for(k<-0 until W(0)(0).length){
+         writer_module.write(W(i)(j)(k).mkString(sep=","))
+         writer_module.write("\n")         
+       }
+     }
+   }
+   writer_module.close()
+  }
+  //读取 save_w输出的模型txt
+  //并修改dA的W    vbias    hbias
+  def read_w_module(file_module_in:String):Unit={
+    var result:ArrayBuffer[String]=ArrayBuffer();
+    var tmp:Array[Double]=Array()
+    Source.fromFile(file_module_in).getLines().foreach(line=>result+=line) 
+    b=result(0).split(",").map(x=>x.toDouble)
+    for(i<-0 until W.length){
+      for(j<-0 until W(0).length){
+        for(k <- 0 until W(0)(0).length){
+          tmp=result(1+i*W(0).length*W(0)(0).length+j*W(0)(0).length).split(",").map(x=>x.toDouble) 
+          for(m<-0 until W(0)(0)(0).length){
+            W(i)(j)(k)(m)=tmp(m)  
+          }
+        }
+      }
+    }
+  }    
     
 }
 
@@ -247,9 +284,9 @@ class ConvLayer(input_size_in:(Int,Int),
 class Max_PoolLayer(input_size:(Int,Int),
                     pre_conv_layer_n_kernel_in:Int,
                     pool_size_in:(Int,Int),
-                    var rng: Random=null) {
+                    _rng: Random=null) {
   
-  if(rng == null) rng = new Random(1234) 
+  var rng:Random=if(_rng == null) new Random(1234) else _rng 
 
   
   /*
@@ -343,7 +380,6 @@ class Max_PoolLayer(input_size:(Int,Int),
             for(s <- 0 until next_layer.kernel_size._1){
               for(t <- 0 until next_layer.kernel_size._2){
                 //相当于MATLAB中的convn(next_layer.d_v,next_layer.W,'full'),即完成了2维的卷积运算
-                //实现了convn(next_layer.d_v,next_layer.W,'full')
                 d_v(c)(tmp1+s)(tmp2+t) += next_layer.d_v(k)(tmp1)(tmp2) * next_layer.W(k)(c)(s)(t)
                 //由于是max 所以没有 *dactivation_fun(input) 
                 
@@ -427,8 +463,10 @@ class ConvPoolLayer(input_size_in:(Int,Int),
           _W:Array[Array[Array[Array[Double]]]]=null,
           _b:Array[Double]=null,
           n_channel_in:Int=3,
-          var rng: Random=null,
+          _rng: Random=null,
           activation:String="ReLU") {
+  
+  var rng:Random=if(_rng == null) new Random(1234) else _rng
   
   //用于初始化conv成参数
   //参考lisa lab和yusugomori
@@ -443,12 +481,12 @@ class ConvPoolLayer(input_size_in:(Int,Int),
                                              _b=_b,
                                              init_a=init_a_tmp,
                                              n_channel_in=n_channel_in,
-                                             rng=rng,
+                                             _rng=rng,
                                              activation=activation)
   val Max_PoolLayer_obj:Max_PoolLayer=new Max_PoolLayer(input_size=(ConvLayer_obj.s0,ConvLayer_obj.s1),
                                                         pre_conv_layer_n_kernel_in=ConvLayer_obj.n_kernel,
                                                         pool_size_in=pool_size_in,
-                                                        rng=rng)
+                                                        _rng=rng)
   
   def output(x: Array[Array[Array[Double]]]):Array[Array[Array[Double]]]={
     ConvLayer_obj.convolve_forward(x=x)
@@ -470,6 +508,7 @@ class ConvPoolLayer(input_size_in:(Int,Int),
     Max_PoolLayer_obj.maxpoollayer_backward_2(x=ConvLayer_obj.activated_input,next_layer=next_layer)
     ConvLayer_obj.convolve_backward(x=x, next_layer=Max_PoolLayer_obj, lr=lr, batch_num=batch_num,alpha=alpha)  
   }
+  
 }
 
 object ConvPoolLayer{

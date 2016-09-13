@@ -25,9 +25,11 @@ class CNN(input_size:(Int,Int),
           pool_size_Array:Array[(Int,Int)],
           n_hidden:Int,
           n_channel:Int=3,
-          var rng: Random=null,
+          _rng: Random=null,
           activation:String="ReLU",
           activation_mlp:String="tanh") {
+  
+  var rng:Random=if(_rng == null) new Random(1234) else _rng
     
   //ConvPoolLayer层个数
   val n_ConvPoolLayer=n_kernel_Array.length
@@ -40,7 +42,7 @@ class CNN(input_size:(Int,Int),
                                                 kernel_size_in=kernel_size_Array(i),
                                                 pool_size_in=pool_size_Array(i),
                                                 n_channel_in=n_channel,
-                                                rng=rng,
+                                                _rng=rng,
                                                 activation=activation)  
     }else{
       ConvPoolLayer_layers(i)=new ConvPoolLayer(input_size_in=(ConvPoolLayer_layers(i-1).Max_PoolLayer_obj.s0,ConvPoolLayer_layers(i-1).Max_PoolLayer_obj.s1),
@@ -48,7 +50,7 @@ class CNN(input_size:(Int,Int),
                                                 kernel_size_in=kernel_size_Array(i),
                                                 pool_size_in=pool_size_Array(i),
                                                 n_channel_in=ConvPoolLayer_layers(i-1).Max_PoolLayer_obj.pre_conv_layer_n_kernel,
-                                                rng=rng,
+                                                _rng=rng,
                                                 activation=activation)        
     }
   }
@@ -478,7 +480,7 @@ object CNN {
       Array(0, 0,1)     
     )
     val n_out:Int=3   
-    val classifier = new  CNN(input_size=(9,9),output_size=n_out,n_kernel_Array=Array(15,20),kernel_size_Array=Array((2,2),(3,3)),pool_size_Array=Array((2,2),(2,2)),n_channel=2,n_hidden=20,rng=null,activation="ReLU",activation_mlp="tanh")//n_epochs=250 alpha=0.0 learning_rate *=0.99  lr=0.1
+    val classifier = new  CNN(input_size=(9,9),output_size=n_out,n_kernel_Array=Array(15,20),kernel_size_Array=Array((2,2),(3,3)),pool_size_Array=Array((2,2),(2,2)),n_channel=2,n_hidden=20,_rng=null,activation="ReLU",activation_mlp="tanh")//n_epochs=250 alpha=0.0 learning_rate *=0.99  lr=0.1
                                                                                                                                                                                                                                               //hidden val a: Double = 4 * math.sqrt(6.0/(n_in + n_out))
                                                                                                                                                                                                                                               //cnn    val init_a_tmp:Double=1/ math.pow(f_out_tmp,0.25)
     val n_epochs:Int=250
@@ -584,9 +586,9 @@ object CNN {
    * Array(0, 0,1),
    * Array(0, 1,0)
    * 最后输出(2层)
-0.95984 0.02178 0.01838 
-0.01030 0.00744 0.98226 
-0.09209 0.85717 0.05074 
+0.98459 0.00537 0.01004 
+0.01091 0.00449 0.98459 
+0.00477 0.99152 0.00370 
    * */      
     }    
   }  
@@ -618,7 +620,7 @@ def train_test_mnist() {
                                                                                                                                                                                                                                      //cnn    val init_a_tmp:Double=1/ math.pow(f_out_tmp,0.25)
                                                                                                                                                                                                                                      //正确率=87.8%
     //lenet5
-    val classifier = new  CNN(input_size=(height,width),output_size=10,n_kernel_Array=Array(6,16,120),kernel_size_Array=Array((5,5),(5,5),(4,4)),pool_size_Array=Array((2,2),(2,2),(1,1)),n_channel=1,n_hidden=84,rng=null,activation="ReLU",activation_mlp="tanh")//lr=0.1 alpha=0.0 learning_rate*=0.99     迭代次数200+ 
+    val classifier = new  CNN(input_size=(height,width),output_size=10,n_kernel_Array=Array(6,16,120),kernel_size_Array=Array((5,5),(5,5),(4,4)),pool_size_Array=Array((2,2),(2,2),(1,1)),n_channel=1,n_hidden=84,_rng=null,activation="ReLU",activation_mlp="tanh")//lr=0.1 alpha=0.0 learning_rate*=0.99     迭代次数200+ 
                                                                                                                                                                                                                                                                    //hidden val a: Double = 4 * math.sqrt(6.0/(n_in + n_out))
                                                                                                                                                                                                                                                                    //cnn    val init_a_tmp:Double=math.sqrt(6.0/(f_in_tmp + f_out_tmp)) 或者=1/ math.pow(f_out_tmp,0.25)
                                                                                                                                                                                                                                                                    //正确率=89。3%
@@ -683,6 +685,6 @@ def train_test_mnist() {
   }  
   def main(args: Array[String]) {
     //test_CNN_simple()//ok
-    train_test_mnist()//--没成功
+    train_test_mnist()//ok
   }   
 }  
