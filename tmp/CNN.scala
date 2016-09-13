@@ -586,9 +586,9 @@ object CNN {
    * Array(0, 0,1),
    * Array(0, 1,0)
    * 最后输出(2层)
-0.95984 0.02178 0.01838 
-0.01030 0.00744 0.98226 
-0.09209 0.85717 0.05074 
+0.98459 0.00537 0.01004 
+0.01091 0.00449 0.98459 
+0.00477 0.99152 0.00370 
    * */      
     }    
   }  
@@ -685,6 +685,6 @@ def train_test_mnist() {
   }  
   def main(args: Array[String]) {
     //test_CNN_simple()//ok
-    train_test_mnist()//--没成功
+    train_test_mnist()//ok
   }   
 }  
