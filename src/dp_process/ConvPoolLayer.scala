@@ -85,6 +85,7 @@ class ConvLayer(input_size_in:(Int,Int),
    * x:一个输入样本的x值=>n_channel*input_size._1*input_size._2 三维给出
    * 详细原理参见[参考资料>CNN>CNN_forward.jpg]
    * 输出=修改activated_input
+   * 相当于 convolved_input=convn(x,rot180(W),'vaild')------二维相关操作 convn是matlab的卷积操作,rot180表示反转180度
    * */
   def convolve_forward(x: Array[Array[Array[Double]]]){
     //最后输出每个核对图片数据的卷积处理后的数据=n_kernel*s0*s1
@@ -101,7 +102,8 @@ class ConvLayer(input_size_in:(Int,Int),
             for(s <- 0 until kernel_size._1){
               //遍历核内的高度
               for(t <- 0 until kernel_size._2){
-                //做卷积运算  核内的元素和输入样本x的元素对应xiangcheng后计算求和
+                //做相关运算  核内的元素和输入样本x的元素对应相乘后计算求和
+                //实现了matlab的 convolved_input=convn(x,rot180(W),'vaild')
                 convolved_input(k)(i)(j) += W(k)(c)(s)(t) * x(c)(i+s)(j+t)
               }
             }
@@ -163,11 +165,8 @@ class ConvLayer(input_size_in:(Int,Int),
             for(s <- 0 until kernel_size._1){
               //遍历核内的高度
               for(t <- 0 until kernel_size._2){
-                //应该实现matlab的 rot180(convn(x,rot180(d_v),'valid')),
-                //d_v(k)(i)(j) * x(c)(i+s)(j+t)完成了convn(x,d_v,'valid')//实际就是卷积层的正向传播,参考convolve_forward的实现
-                //其中再把d_v(k)(i)(j)->d_v(k)((s0-1)-i)((s1-1)-j)实现了rot180(d_v)
-                //输出W_add(k)(c)(s)(t)->W_add(k)(c)((kernel_size._1-1)-s)((kernel_size._2-1)-t) 事先最后的rot180
-                W_add_tmp(k)(c)((kernel_size._1-1)-s)((kernel_size._2-1)-t) += x(c)(i+s)(j+t)*d_v(k)((s0-1)-i)((s1-1)-j) 
+                //应该实现matlab的 W_add_tmp=convn(x,rot180(d_v),'valid'),//实际就是卷积层的正向传播,参考convolve_forward的实现
+                W_add_tmp(k)(c)(s)(t) += x(c)(i+s)(j+t)*d_v(k)(i)(j) 
               }
             }
           }          
@@ -343,18 +342,9 @@ class Max_PoolLayer(input_size:(Int,Int),
           for(k <- 0 until next_layer.n_kernel){
             for(s <- 0 until next_layer.kernel_size._1){
               for(t <- 0 until next_layer.kernel_size._2){
-                /* vision 1
-                //相当于MATLAB中的convn(next_layer.d_v,rot180(next_layer.W),'full'),即完成了2维的卷积运算
+                //相当于MATLAB中的convn(next_layer.d_v,next_layer.W,'full'),即完成了2维的卷积运算
+                //实现了convn(next_layer.d_v,next_layer.W,'full')
                 d_v(c)(tmp1+s)(tmp2+t) += next_layer.d_v(k)(tmp1)(tmp2) * next_layer.W(k)(c)(s)(t)
-                //由于是max 所以没有 *dactivation_fun(input)
-                */
-                
-                /* vision 2*/
-                //相当于MATLAB中的convn(next_layer.d_v,rot180(next_layer.W),'full'),即完成了2维的卷积运算
-                //其中 d_v(c)(tmp1+s)(tmp2+t) += next_layer.d_v(k)(tmp1)(tmp2) * next_layer.W(k)(c)(s)(t) 实现了convn(next_layer.d_v,next_layer.W,'full')
-                //把next_layer.W(k)(c)(s)(t)换为next_layer.W(k)(c)((next_layer.kernel_size._1-1)-s)((next_layer.kernel_size._2-1)-t) 实现了rot180
-                //d_v(c)(tmp1+s)(tmp2+t) += next_layer.d_v(k)(tmp1)(tmp2) * next_layer.W(k)(c)(s)(t) 
-                d_v(c)(tmp1+s)(tmp2+t) += next_layer.d_v(k)(tmp1)(tmp2) * next_layer.W(k)(c)((next_layer.kernel_size._1-1)-s)((next_layer.kernel_size._2-1)-t)
                 //由于是max 所以没有 *dactivation_fun(input) 
                 
               }
@@ -444,8 +434,8 @@ class ConvPoolLayer(input_size_in:(Int,Int),
   //参考lisa lab和yusugomori
   val f_in_tmp:Int  = n_channel_in * kernel_size_in._1 * kernel_size_in._2
   val f_out_tmp:Int = (n_kernel_in * kernel_size_in._1 * kernel_size_in._2)/(pool_size_in._1*pool_size_in._2)
-  //val init_a_tmp:Double=math.sqrt(6.0/(f_in_tmp + f_out_tmp)) 
-  val init_a_tmp:Double=1/ math.pow(f_out_tmp,0.25)  //cnn simple
+  val init_a_tmp:Double=math.sqrt(6.0/(f_in_tmp + f_out_tmp)) 
+  //val init_a_tmp:Double=1/ math.pow(f_out_tmp,0.25)  //cnn simple
   val ConvLayer_obj:ConvLayer= new ConvLayer(input_size_in=input_size_in,
                                              n_kernel_in=n_kernel_in,
                                              kernel_size_in=kernel_size_in,
@@ -617,7 +607,6 @@ max_index_x_i:
     //ok
     ////数据案例使用 《CNN的反向求导及联系.pdf》中的问题三
     print("step3: test for Max_PoolLayer backward_1(maxpool的下一层是卷积层conv) :\n")
-    /* vision 1
     var init_w_2:Array[Array[Array[Array[Double]]]]=Array(
         Array(
             Array(
@@ -631,23 +620,7 @@ max_index_x_i:
                 Array(0.1,0.2)
             )             
         )
-    )*/
-    
-    /* vision 2 */
-    var init_w_2:Array[Array[Array[Array[Double]]]]=Array(
-        Array(
-            Array(
-                Array(0.4,0.2), 
-                Array(0.2,0.1)
-            )            
-        ),
-        Array(
-            Array(
-                Array(0.2,0.1), 
-                Array(0.1,-0.3)
-            )             
-        )
-    )     
+    )    
     var ConvPoolLayer_obj_test_2_next:ConvPoolLayer =new ConvPoolLayer(input_size_in=(3,3),
                                                                 n_kernel_in=2,
                                                                 kernel_size_in=(2,2),
@@ -686,7 +659,7 @@ d_v_i:
 -0.5	0.4000000000000001	0.7000000000000001	
 0.3000000000000001	1.9000000000000006	1.9000000000000004	
 0.5	1.5	1.0	
-d_v_i=conv(nextlayer.d_v,rot180(nextlayer.w),'full')
+d_v_i=conv(nextlayer.d_v,nextlayer.w,'full')
  * */  
     
     //ok
@@ -734,15 +707,15 @@ x:
 1.0	2.0	3.0	4.0	5.0	6.0	7.0	
 1.0	2.0	3.0	4.0	5.0	6.0	7.0	
 d_v:
-0.0	0.0	0.0	-104.49666567769285	
-0.0	-16.570779564884706	0.0	0.0	
--19.85805972596852	0.0	0.0	0.0	
-0.0	0.0	-99.48737429897888	0.0	
+0.0	0.0	0.0	-168.04927028385532	
+0.0	-26.265052184478442	0.0	0.0	
+-31.075304665281394	0.0	0.0	0.0	
+0.0	0.0	-159.03190353166173	0.0	
 W_add_0_0:
--1153.8546296767536	-913.4417504092287	-673.0288711417038	-432.6159918741788	
--1153.8546296767536	-913.4417504092287	-673.0288711417038	-432.6159918741788	
--1153.8546296767536	-913.4417504092287	-673.0288711417038	-432.6159918741788	
--1153.8546296767536	-913.4417504092287	-673.0288711417038	-432.6159918741788	
+-1232.8982007646448	-1617.3197314299218	-2001.7412620951986	-2386.1627927604754	
+-1232.8982007646448	-1617.3197314299218	-2001.7412620951986	-2386.1627927604754	
+-1232.8982007646448	-1617.3197314299218	-2001.7412620951986	-2386.1627927604754	
+-1232.8982007646448	-1617.3197314299218	-2001.7412620951986	-2386.1627927604754
 W_add_0_0=rot180(convn(x,rot180(d_v)),'valid'))
      * */    
     
