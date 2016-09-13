@@ -27,10 +27,10 @@ class ConvLayer(input_size_in:(Int,Int),
                 _W:Array[Array[Array[Array[Double]]]]=null,
                 _b:Array[Double]=null,
                 n_channel_in:Int=3,
-                var rng: Random=null,
+                _rng: Random=null,
                 activation:String="ReLU") {
   
-  if(rng == null) rng = new Random(1234) 
+  var rng:Random=if(_rng == null) new Random(1234) else _rng
   
   /*
    * 其它全局变量
@@ -86,6 +86,7 @@ class ConvLayer(input_size_in:(Int,Int),
    * x:一个输入样本的x值=>n_channel*input_size._1*input_size._2 三维给出
    * 详细原理参见[参考资料>CNN>CNN_forward.jpg]
    * 输出=修改activated_input
+   * 相当于 convolved_input=convn(x,rot180(W),'vaild')------二维相关操作 convn是matlab的卷积操作,rot180表示反转180度
    * */
   def convolve_forward(x: Array[Array[Array[Double]]]){
     //最后输出每个核对图片数据的卷积处理后的数据=n_kernel*s0*s1
@@ -102,7 +103,8 @@ class ConvLayer(input_size_in:(Int,Int),
             for(s <- 0 until kernel_size._1){
               //遍历核内的高度
               for(t <- 0 until kernel_size._2){
-                //做卷积运算  核内的元素和输入样本x的元素对应xiangcheng后计算求和
+                //做相关运算  核内的元素和输入样本x的元素对应相乘后计算求和
+                //实现了matlab的 convolved_input=convn(x,rot180(W),'vaild')
                 convolved_input(k)(i)(j) += W(k)(c)(s)(t) * x(c)(i+s)(j+t)
               }
             }
@@ -164,12 +166,8 @@ class ConvLayer(input_size_in:(Int,Int),
             for(s <- 0 until kernel_size._1){
               //遍历核内的高度
               for(t <- 0 until kernel_size._2){
-                //应该实现matlab的 rot180(convn(x,rot180(d_v),'valid')),
-                //d_v(k)(i)(j) * x(c)(i+s)(j+t)完成了convn(x,d_v,'valid')//实际就是卷积层的正向传播,参考convolve_forward的实现
-                //其中再把d_v(k)(i)(j)->d_v(k)((s0-1)-i)((s1-1)-j)实现了rot180(d_v)
-                //输出W_add(k)(c)(s)(t)->W_add(k)(c)((kernel_size._1-1)-s)((kernel_size._2-1)-t) 事先最后的rot180
-                W_add_tmp(k)(c)((kernel_size._1-1)-s)((kernel_size._2-1)-t) += x(c)(i+s)(j+t)*d_v(k)((s0-1)-i)((s1-1)-j) 
-                //W_add_tmp(k)(c)((kernel_size._1-1)-s)((kernel_size._2-1)-t) += x(c)(i+s)(j+t)*d_v(k)(i)(j) 
+                //应该实现matlab的 W_add_tmp=convn(x,rot180(d_v),'valid'),//实际就是卷积层的正向传播,参考convolve_forward的实现
+                W_add_tmp(k)(c)(s)(t) += x(c)(i+s)(j+t)*d_v(k)(i)(j) 
               }
             }
           }          
@@ -238,234 +236,7 @@ class ConvLayer(input_size_in:(Int,Int),
         0.0
       }
     }  
-    
-    
-    
-  /*
-   * 用于 pretrain 预处理(da方法)
-   * 模拟 dA
-   * */
-  var cross_entropy_result:Double=0.0
-  var vbias:Array[Double]=new Array[Double](n_channel)
-  //使用交叉信息嫡cross-entropy衡量样本输入和经过编解码后输出的相近程度
-  //值在>=0 当为0时 表示距离接近
-  //每次批量迭代后该值越来越小
-  def cross_entropy(x: Array[Array[Array[Double]]], z:  Array[Array[Array[Double]]]):Double={
-    var result:Double=0.0
-    for(i <-0 until x.length){
-      for(j <-0 until x(0).length){
-        for(k <-0 until x(0)(0).length){
-          result += x(i)(j)(k)*math.log(z(i)(j)(k))+(1-x(i)(j)(k))*math.log(1-z(i)(j)(k))
-        }
-      }  
-    }
-   -1.0 * result
-  }  
-  //定义二项分布的随机数产生函数
-  //n是二项分布数据的个数,例如=100个
-  //p是二项分=1的概率值,例如=0.2
-  //返回值=n中取值=1的个数约等于 =100*0.2=20 ,随机值
-  //如果n=1则为产生一个二项分布的随机数
-  def binomial(n: Int, p: Double): Double = {
-      if(p < 0 || p > 1) return 0
-      var c: Int = 0
-      var r: Double = 0
-      var i: Int = 0
-      for(i <- 0 until n) {
-        r = rng.nextDouble()
-        if(r < p) c += 1
-      }
-      c.toDouble
-  }    
-  //把一维向量x对根据二项分布p 加入噪音,最后生成tilde_x
-  //如果原始数据=0,则依旧=0
-  //如果原始数据不等于0,则=binomial(1, p)   取值为0或1的值,随机生成1的概率=p
-  def get_corrupted_input(x: Array[Array[Array[Double]]], tilde_x:Array[Array[Array[Double]]], p: Double) {
-      for(i <-0 until x.length){
-        for(j<-0 until x(0).length){
-          for(k<-0 until x(0)(0).length){
-            if(x(i)(j)(k) == 0) {
-              tilde_x(i)(j)(k) = 0.0;
-            } else {
-              tilde_x(i)(j)(k) = binomial(1, p)*x(i)(j)(k)
-            }            
-          }
-        }
-      }
-  }
-  // Encode 编码过程：v-->h  代码几乎等于向前传播convolve_forward
-  // 把可视层(v)内的单元的值 经过v->h连接的系数W加权求和并加上隐藏层单元的偏置,最后经过sigmoid映射为[0,1]数值=隐藏层(h)内每个单元的数值=y
-  def get_hidden_values(x: Array[Array[Array[Double]]], y: Array[Array[Array[Double]]]) {
-    val tmp:Array[Array[Array[Double]]]=Array.ofDim[Double](y.length,y(0).length,y(0)(0).length)
-    for(k <- 0 until n_kernel){
-      for(i <- 0 until s0){ 
-        for(j <- 0 until s1){
-          for(c <- 0 until n_channel){
-            for(s <- 0 until kernel_size._1){
-              for(t <- 0 until kernel_size._2){
-                tmp(k)(i)(j) += W(k)(c)(s)(t) * x(c)(i+s)(j+t)
-              }
-            }
-          }
-          tmp(k)(i)(j)=tmp(k)(i)(j) + b(k)
-          y(k)(i)(j) = utils.sigmoid(tmp(k)(i)(j))
-        }
-      }
-    } 
-  }
-  // Decode  解码过程由:h-->v
-  // 把隐藏层(h)内的单元的值 经过h->v连接的系数W加权求和并加上可视层单元的偏置,最后经过sigmoid映射为[0,1]数值=可视层(v)内每个单元的数值=z
-  def get_reconstructed_input(y: Array[Array[Array[Double]]], z:Array[Array[Array[Double]]]) {
-    val tmp:Array[Array[Array[Double]]]=Array.ofDim[Double](n_channel,input_size._1,input_size._2)
-    /*vision1  --ok 但是感觉和maxpoollayer_backward_1冲突了
-    //计算反向求和
-    for(c <- 0 until n_channel){
-      //遍历y
-      for(k <- 0 until n_kernel){
-        for(i <- 0 until s0){ 
-          for(j <- 0 until s1){
-            //遍历k内核
-            for(s <- 0 until kernel_size._1){
-              for(t <- 0 until kernel_size._2){
-                tmp(c)(s+i)(t+j) += y(k)(i)(j) * W(k)(c)(s)(t)
-              }
-            }
-          }
-        }
-      }
-    } 
-    //添加偏差量  并经过sigmoid处理
-    for(c <- 0 until n_channel){
-      for(i <-0 until input_size._1){
-        for(j<-0 until input_size._2){
-          z(c)(i)(j)=tmp(c)(i)(j)+vbias(c)
-          z(c)(i)(j)=utils.sigmoid(z(c)(i)(j))
-        }
-      }
-    }    */
-     
-    /* vision2  参考 maxpoollayer_backward_1 无法运行老是na   ？？？？？？？？？？  */
-    //计算反向求和
-    //遍历y
-    for(k <- 0 until n_kernel){
-      for(i <- 0 until s0){ 
-        for(j <- 0 until s1){
-          //遍历k内核
-          for(c <- 0 until n_channel){
-            for(s <- 0 until kernel_size._1){
-              for(t <- 0 until kernel_size._2){
-                tmp(c)(s+i)(t+j) += y(k)(i)(j) * W(k)(c)(kernel_size._1-1-s)(kernel_size._2-1-t)
-              }
-            }
-          }
-        }
-      }
-    }      
-    //添加偏差量  并经过sigmoid处理
-    for(c <- 0 until n_channel){
-      for(i <-0 until input_size._1){
-        for(j<-0 until input_size._2){
-          z(c)(i)(j)=tmp(c)(i)(j)+vbias(c)
-          z(c)(i)(j)=utils.sigmoid(z(c)(i)(j))
-        }
-      }
-    }
-  } 
-  //pretrain 预处理  da 方式
-  def pre_train_da(x: Array[Array[Array[Double]]], lr: Double, corruption_level: Double,batch_num:Int){
-      var tilde_x: Array[Array[Array[Double]]] = Array.ofDim[Double](x.length,x(0).length,x(0)(0).length)//经过加噪音处理后的x输入
-      var y: Array[Array[Array[Double]]] = Array.ofDim[Double](n_kernel,s0,s1) //编码后的数据
-      var z: Array[Array[Array[Double]]] = Array.ofDim[Double](x.length,x(0).length,x(0)(0).length) //解码后的数据     
-      val p: Double = 1 - corruption_level
-      //  x--->加噪音--->tilde_x
-      get_corrupted_input(x, tilde_x, p)
-      // tilde_x----->编码---->y---->解码---->z
-      get_hidden_values(tilde_x,y)//完成一次编码,输出=y
-      get_reconstructed_input(y, z)//完成一次解码,输出=z
-      cross_entropy_result += cross_entropy(x,z)//衡量输入和经过编解码后的输出数据之间的相似度(使用KL散度,即相对信息嫡) 
-      /* 计算 L_vbias 并对vbias迭代 */
-      val L_vbias: Array[Array[Array[Double]]] = Array.ofDim[Double](x.length,x(0).length,x(0)(0).length)//x和z的误差
-      for(i<- 0 until x.length){
-        for(j<- 0 until x(0).length){
-          for(k<- 0 until x(0)(0).length){
-            L_vbias(i)(j)(k)=x(i)(j)(k)-z(i)(j)(k)
-            vbias(i) += lr * L_vbias(i)(j)(k)/batch_num
-          }
-        }
-      }
-      /* 计算L_hbias 并对b迭代 */
-      val L_hbias:Array[Array[Array[Double]]] = Array.ofDim[Double](y.length,y(0).length,y(0)(0).length)
-      for(k <- 0 until n_kernel){
-        for(i <- 0 until s0){ 
-          for(j <- 0 until s1){
-            for(c <- 0 until n_channel){
-              for(s <- 0 until kernel_size._1){
-                for(t <- 0 until kernel_size._2){
-                  L_hbias(k)(i)(j) += W(k)(c)(s)(t) * L_vbias(c)(i+s)(j+t)//L_vbias向前传播
-                }
-              }
-            }
-            L_hbias(k)(i)(j) =L_hbias(k)(i)(j) * utils.dsigmoid(y(k)(i)(j))
-            b(k) += lr * L_hbias(k)(i)(j) / batch_num
-          }
-        }
-      }      
-      /* W迭代  vision1 对应get_reconstructed_input的vision1
-      for(k <- 0 until n_kernel){
-        for(i <- 0 until s0){ 
-          for(j <- 0 until s1){
-            for(c <- 0 until n_channel){
-              for(s <- 0 until kernel_size._1){
-                for(t <- 0 until kernel_size._2){
-                  W(k)(c)(s)(t) += lr* (L_hbias(k)(i)(j)*tilde_x(c)(i+s)(j+t)+L_vbias(c)(i+s)(j+t)*y(k)(i)(j))/batch_num
-                }
-              }
-            }
-          }
-        }
-      } */
-      /* W迭代  vision2 对应get_reconstructed_input的vision2 参考convolve_backward */
-      for (c<- 0 until n_channel){
-        for(i<- 0 until s0){
-          for(j<- 0 until s1){
-            for(k <- 0 until n_kernel){
-              for(s <- 0 until kernel_size._1){
-                for(t <- 0 until kernel_size._2){
-                  W(k)(c)(kernel_size._1-1-s)(kernel_size._2-1-t) +=lr *( tilde_x(c)(i+s)(j+t)*L_hbias(k)(s0-1-i)(s1-1-j)+L_vbias(c)(i+s)(j+t)*y(k)(s0-1-i)(s1-1-j) )/batch_num
-                  //参考convolve_backward 的  W_add_tmp(k)(c)((kernel_size._1-1)-s)((kernel_size._2-1)-t) += x(c)(i+s)(j+t)*d_v(k)((s0-1)-i)((s1-1)-j) 
-                }
-              }
-            }
-          }  
-        }
-      }   
-  }      
 
-  def pre_train_da_batch(inputs: Array[Array[Array[Array[Double]]]], lr: Double, corruption_level: Double,batch_num_per:Double):Unit={
-    //抽取样本个数
-    val batch_num:Int=if(batch_num_per==1.0){
-      inputs.length
-    }else{
-      math.round((inputs.length*batch_num_per).toFloat)//每次批量训练样本数
-    }
-    cross_entropy_result=0.0//每次批量开始时,把上次的交叉信息嫡清零  
-    
-    //完成一次批量训练
-    val rng_epooch:Random=new Random()//每次生成一个种子
-    val rng_index:ArrayBuffer[Int]=ArrayBuffer();
-    if(batch_num_per==1.0){
-      for(i <- 0 to (batch_num-1)) rng_index += i//抽样样本的角标 
-    }else{
-      for(i <- 0 to (batch_num-1)) rng_index += math.round((rng_epooch.nextDouble()*(inputs.length-1)).toFloat)//抽样样本的角标        
-    }
-    //正式训练一批次的样本
-    for(i <- rng_index) {
-      //根据一个样本完成一次训练,迭代增量取 1/batch_num
-      pre_train_da(inputs(i), lr,corruption_level,batch_num)
-    }
-    //完成一批次训练后计算本批次的平均交叉嫡cross_entropy_result/batch_num (cross_entropy_result内部是累加的)
-    println("cross_entropy="+cross_entropy_result/batch_num) 
-  }
   //记录系数
   def save_w(file_module_in:String):Unit={
    val writer_module = new PrintWriter(new File(file_module_in)) 
@@ -500,16 +271,9 @@ class ConvLayer(input_size_in:(Int,Int),
         }
       }
     }
-  }
-  //不训练,直接经过编码和解码过程
-  def reconstruct(x: Array[Array[Array[Double]]], z: Array[Array[Array[Double]]]) {
-    val y: Array[Array[Array[Double]]] = Array.ofDim[Double](n_kernel,s0,s1)
-    get_hidden_values(x, y)
-    get_reconstructed_input(y,z)
-  }
-}  
-
-
+  }    
+    
+}
 
 //池化层
 /*
@@ -520,9 +284,9 @@ class ConvLayer(input_size_in:(Int,Int),
 class Max_PoolLayer(input_size:(Int,Int),
                     pre_conv_layer_n_kernel_in:Int,
                     pool_size_in:(Int,Int),
-                    var rng: Random=null) {
+                    _rng: Random=null) {
   
-  if(rng == null) rng = new Random(1234) 
+  var rng:Random=if(_rng == null) new Random(1234) else _rng 
 
   
   /*
@@ -615,17 +379,8 @@ class Max_PoolLayer(input_size:(Int,Int),
           for(k <- 0 until next_layer.n_kernel){
             for(s <- 0 until next_layer.kernel_size._1){
               for(t <- 0 until next_layer.kernel_size._2){
-                /* vision 1
-                //相当于MATLAB中的convn(next_layer.d_v,rot180(next_layer.W),'full'),即完成了2维的卷积运算
+                //相当于MATLAB中的convn(next_layer.d_v,next_layer.W,'full'),即完成了2维的卷积运算
                 d_v(c)(tmp1+s)(tmp2+t) += next_layer.d_v(k)(tmp1)(tmp2) * next_layer.W(k)(c)(s)(t)
-                //由于是max 所以没有 *dactivation_fun(input)
-                */
-                
-                /* vision 2*/
-                //相当于MATLAB中的convn(next_layer.d_v,rot180(next_layer.W),'full'),即完成了2维的卷积运算
-                //其中 d_v(c)(tmp1+s)(tmp2+t) += next_layer.d_v(k)(tmp1)(tmp2) * next_layer.W(k)(c)(s)(t) 实现了convn(next_layer.d_v,next_layer.W,'full')
-                //把next_layer.W(k)(c)(s)(t)换为next_layer.W(k)(c)((next_layer.kernel_size._1-1)-s)((next_layer.kernel_size._2-1)-t) 实现了rot180
-                d_v(c)(tmp1+s)(tmp2+t) += next_layer.d_v(k)(tmp1)(tmp2) * next_layer.W(k)(c)((next_layer.kernel_size._1-1)-s)((next_layer.kernel_size._2-1)-t)//vision2 ok
                 //由于是max 所以没有 *dactivation_fun(input) 
                 
               }
@@ -708,15 +463,17 @@ class ConvPoolLayer(input_size_in:(Int,Int),
           _W:Array[Array[Array[Array[Double]]]]=null,
           _b:Array[Double]=null,
           n_channel_in:Int=3,
-          var rng: Random=null,
+          _rng: Random=null,
           activation:String="ReLU") {
+  
+  var rng:Random=if(_rng == null) new Random(1234) else _rng
   
   //用于初始化conv成参数
   //参考lisa lab和yusugomori
   val f_in_tmp:Int  = n_channel_in * kernel_size_in._1 * kernel_size_in._2
   val f_out_tmp:Int = (n_kernel_in * kernel_size_in._1 * kernel_size_in._2)/(pool_size_in._1*pool_size_in._2)
-  //val init_a_tmp:Double=math.sqrt(6.0/(f_in_tmp + f_out_tmp)) 
-  val init_a_tmp:Double=1/ math.pow(f_out_tmp,0.25)  //cnn simple
+  val init_a_tmp:Double=math.sqrt(6.0/(f_in_tmp + f_out_tmp)) 
+  //val init_a_tmp:Double=1/ math.pow(f_out_tmp,0.25)  //cnn simple
   val ConvLayer_obj:ConvLayer= new ConvLayer(input_size_in=input_size_in,
                                              n_kernel_in=n_kernel_in,
                                              kernel_size_in=kernel_size_in,
@@ -724,12 +481,12 @@ class ConvPoolLayer(input_size_in:(Int,Int),
                                              _b=_b,
                                              init_a=init_a_tmp,
                                              n_channel_in=n_channel_in,
-                                             rng=rng,
+                                             _rng=rng,
                                              activation=activation)
   val Max_PoolLayer_obj:Max_PoolLayer=new Max_PoolLayer(input_size=(ConvLayer_obj.s0,ConvLayer_obj.s1),
                                                         pre_conv_layer_n_kernel_in=ConvLayer_obj.n_kernel,
                                                         pool_size_in=pool_size_in,
-                                                        rng=rng)
+                                                        _rng=rng)
   
   def output(x: Array[Array[Array[Double]]]):Array[Array[Array[Double]]]={
     ConvLayer_obj.convolve_forward(x=x)
@@ -751,6 +508,7 @@ class ConvPoolLayer(input_size_in:(Int,Int),
     Max_PoolLayer_obj.maxpoollayer_backward_2(x=ConvLayer_obj.activated_input,next_layer=next_layer)
     ConvLayer_obj.convolve_backward(x=x, next_layer=Max_PoolLayer_obj, lr=lr, batch_num=batch_num,alpha=alpha)  
   }
+  
 }
 
 object ConvPoolLayer{
@@ -888,7 +646,6 @@ max_index_x_i:
     //ok
     ////数据案例使用 《CNN的反向求导及联系.pdf》中的问题三
     print("step3: test for Max_PoolLayer backward_1(maxpool的下一层是卷积层conv) :\n")
-    /* vision 1
     var init_w_2:Array[Array[Array[Array[Double]]]]=Array(
         Array(
             Array(
@@ -902,23 +659,7 @@ max_index_x_i:
                 Array(0.1,0.2)
             )             
         )
-    )*/
-    
-    /* vision 2 */
-    var init_w_2:Array[Array[Array[Array[Double]]]]=Array(
-        Array(
-            Array(
-                Array(0.4,0.2), 
-                Array(0.2,0.1)
-            )            
-        ),
-        Array(
-            Array(
-                Array(0.2,0.1), 
-                Array(0.1,-0.3)
-            )             
-        )
-    )     
+    )    
     var ConvPoolLayer_obj_test_2_next:ConvPoolLayer =new ConvPoolLayer(input_size_in=(3,3),
                                                                 n_kernel_in=2,
                                                                 kernel_size_in=(2,2),
@@ -957,7 +698,7 @@ d_v_i:
 -0.5	0.4000000000000001	0.7000000000000001	
 0.3000000000000001	1.9000000000000006	1.9000000000000004	
 0.5	1.5	1.0	
-d_v_i=conv(nextlayer.d_v,rot180(nextlayer.w),'full')
+d_v_i=conv(nextlayer.d_v,nextlayer.w,'full')
  * */  
     
     //ok
@@ -1005,58 +746,18 @@ x:
 1.0	2.0	3.0	4.0	5.0	6.0	7.0	
 1.0	2.0	3.0	4.0	5.0	6.0	7.0	
 d_v:
-0.0	0.0	0.0	-104.49666567769285	
-0.0	-16.570779564884706	0.0	0.0	
--19.85805972596852	0.0	0.0	0.0	
-0.0	0.0	-99.48737429897888	0.0	
+0.0	0.0	0.0	-168.04927028385532	
+0.0	-26.265052184478442	0.0	0.0	
+-31.075304665281394	0.0	0.0	0.0	
+0.0	0.0	-159.03190353166173	0.0	
 W_add_0_0:
--1153.8546296767536	-913.4417504092287	-673.0288711417038	-432.6159918741788	
--1153.8546296767536	-913.4417504092287	-673.0288711417038	-432.6159918741788	
--1153.8546296767536	-913.4417504092287	-673.0288711417038	-432.6159918741788	
--1153.8546296767536	-913.4417504092287	-673.0288711417038	-432.6159918741788	
+-1232.8982007646448	-1617.3197314299218	-2001.7412620951986	-2386.1627927604754	
+-1232.8982007646448	-1617.3197314299218	-2001.7412620951986	-2386.1627927604754	
+-1232.8982007646448	-1617.3197314299218	-2001.7412620951986	-2386.1627927604754	
+-1232.8982007646448	-1617.3197314299218	-2001.7412620951986	-2386.1627927604754
 W_add_0_0=rot180(convn(x,rot180(d_v)),'valid'))
      * */    
-                                                             
-    //pre_train与训练
-    //使用mnist数据集进行训练
-    val filePath_train:String="D:/youku_work/python/spark_python_scala/scala/workpace/deeplearning/dataset/mnist/valid_data.txt"//train数据量大,暂时使用valid数据
-    val width:Int=28;
-    val height:Int=28;//debug 28*28
-    val train_X:Array[Array[Array[Array[Double]]]]=dp_utils.dataset.load_mnist(filePath_train).map(x=>{val tmp:Array[Array[Double]]=Array.ofDim[Double](height,width);for(i <- 0 until height){for(j <-0 until width){tmp(i)(j)=x._2(i*width+j)}};Array(tmp)})
-
-    def trans_int_to_bin(int_in:Int):Array[Int]={
-      val result:Array[Int]=Array(0,0,0,0,0,0,0,0,0,0);
-      result(int_in)=1
-      result
-    }
-    val train_Y:Array[Array[Int]]=dp_utils.dataset.load_mnist(filePath_train).map(x=>trans_int_to_bin(x._1))
-    val train_N: Int = train_X.length
     
-    val rng: Random = new Random(123)
-    var learning_rate: Double = 0.1
-    val n_epochs: Int = 200
-    val convpool_obj: ConvPoolLayer = new ConvPoolLayer(input_size_in=(height,width),
-                                                 n_kernel_in=50,
-                                                 kernel_size_in=(5,5),
-                                                 pool_size_in=(2,2),
-                                                 _W=null,
-                                                 _b=null,
-                                                 n_channel_in=1,
-                                                 rng=null,
-                                                 activation="ReLU")
-
-    // train
-    var epoch: Int = 0
-    //批量训练 training_epochs次
-    for(epoch <- 0 until n_epochs) {
-      println("第"+epoch+"次迭代:")
-      convpool_obj.ConvLayer_obj.pre_train_da_batch(train_X, learning_rate, 0.1, 0.01)
-      if(epoch==(n_epochs-1) || epoch==math.round(n_epochs.toDouble/4.0) || epoch==math.round(2.0*n_epochs.toDouble/4.0) || epoch==math.round(3.0*n_epochs.toDouble/4.0)){
-        //记录权值w
-        convpool_obj.ConvLayer_obj.save_w("D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//module_out//Conv_mnist_module"+epoch+".txt")
-      }
-    } 
-                                                             
   }   
   
 }
