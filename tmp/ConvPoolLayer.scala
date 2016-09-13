@@ -317,6 +317,7 @@ class ConvLayer(input_size_in:(Int,Int),
   // 把隐藏层(h)内的单元的值 经过h->v连接的系数W加权求和并加上可视层单元的偏置,最后经过sigmoid映射为[0,1]数值=可视层(v)内每个单元的数值=z
   def get_reconstructed_input(y: Array[Array[Array[Double]]], z:Array[Array[Array[Double]]]) {
     val tmp:Array[Array[Array[Double]]]=Array.ofDim[Double](n_channel,input_size._1,input_size._2)
+    /*vision1  --ok 但是感觉和maxpoollayer_backward_1冲突了
     //计算反向求和
     for(c <- 0 until n_channel){
       //遍历y
@@ -332,7 +333,34 @@ class ConvLayer(input_size_in:(Int,Int),
           }
         }
       }
-    }  
+    } 
+    //添加偏差量  并经过sigmoid处理
+    for(c <- 0 until n_channel){
+      for(i <-0 until input_size._1){
+        for(j<-0 until input_size._2){
+          z(c)(i)(j)=tmp(c)(i)(j)+vbias(c)
+          z(c)(i)(j)=utils.sigmoid(z(c)(i)(j))
+        }
+      }
+    }    */
+     
+    /* vision2  参考 maxpoollayer_backward_1 无法运行老是na   ？？？？？？？？？？  */
+    //计算反向求和
+    //遍历y
+    for(k <- 0 until n_kernel){
+      for(i <- 0 until s0){ 
+        for(j <- 0 until s1){
+          //遍历k内核
+          for(c <- 0 until n_channel){
+            for(s <- 0 until kernel_size._1){
+              for(t <- 0 until kernel_size._2){
+                tmp(c)(s+i)(t+j) += y(k)(i)(j) * W(k)(c)(kernel_size._1-1-s)(kernel_size._2-1-t)
+              }
+            }
+          }
+        }
+      }
+    }      
     //添加偏差量  并经过sigmoid处理
     for(c <- 0 until n_channel){
       for(i <-0 until input_size._1){
@@ -355,7 +383,7 @@ class ConvLayer(input_size_in:(Int,Int),
       get_hidden_values(tilde_x,y)//完成一次编码,输出=y
       get_reconstructed_input(y, z)//完成一次解码,输出=z
       cross_entropy_result += cross_entropy(x,z)//衡量输入和经过编解码后的输出数据之间的相似度(使用KL散度,即相对信息嫡) 
-      /* vbias迭代 */
+      /* 计算 L_vbias 并对vbias迭代 */
       val L_vbias: Array[Array[Array[Double]]] = Array.ofDim[Double](x.length,x(0).length,x(0)(0).length)//x和z的误差
       for(i<- 0 until x.length){
         for(j<- 0 until x(0).length){
@@ -365,7 +393,7 @@ class ConvLayer(input_size_in:(Int,Int),
           }
         }
       }
-      /* b迭代 */
+      /* 计算L_hbias 并对b迭代 */
       val L_hbias:Array[Array[Array[Double]]] = Array.ofDim[Double](y.length,y(0).length,y(0)(0).length)
       for(k <- 0 until n_kernel){
         for(i <- 0 until s0){ 
@@ -373,16 +401,16 @@ class ConvLayer(input_size_in:(Int,Int),
             for(c <- 0 until n_channel){
               for(s <- 0 until kernel_size._1){
                 for(t <- 0 until kernel_size._2){
-                  L_hbias(k)(i)(j) += W(k)(c)(s)(t) * L_vbias(c)(i+s)(j+t)
+                  L_hbias(k)(i)(j) += W(k)(c)(s)(t) * L_vbias(c)(i+s)(j+t)//L_vbias向前传播
                 }
               }
             }
-            L_hbias(k)(i)(j) *=utils.dsigmoid(y(k)(i)(j))
+            L_hbias(k)(i)(j) =L_hbias(k)(i)(j) * utils.dsigmoid(y(k)(i)(j))
             b(k) += lr * L_hbias(k)(i)(j) / batch_num
           }
         }
       }      
-      /* W迭代 */
+      /* W迭代  vision1 对应get_reconstructed_input的vision1
       for(k <- 0 until n_kernel){
         for(i <- 0 until s0){ 
           for(j <- 0 until s1){
@@ -395,8 +423,24 @@ class ConvLayer(input_size_in:(Int,Int),
             }
           }
         }
-      }      
-  }
+      } */
+      /* W迭代  vision2 对应get_reconstructed_input的vision2 参考convolve_backward */
+      for (c<- 0 until n_channel){
+        for(i<- 0 until s0){
+          for(j<- 0 until s1){
+            for(k <- 0 until n_kernel){
+              for(s <- 0 until kernel_size._1){
+                for(t <- 0 until kernel_size._2){
+                  W(k)(c)(kernel_size._1-1-s)(kernel_size._2-1-t) +=lr *( tilde_x(c)(i+s)(j+t)*L_hbias(k)(s0-1-i)(s1-1-j)+L_vbias(c)(i+s)(j+t)*y(k)(s0-1-i)(s1-1-j) )/batch_num
+                  //参考convolve_backward 的  W_add_tmp(k)(c)((kernel_size._1-1)-s)((kernel_size._2-1)-t) += x(c)(i+s)(j+t)*d_v(k)((s0-1)-i)((s1-1)-j) 
+                }
+              }
+            }
+          }  
+        }
+      }   
+  }      
+
   def pre_train_da_batch(inputs: Array[Array[Array[Array[Double]]]], lr: Double, corruption_level: Double,batch_num_per:Double):Unit={
     //抽取样本个数
     val batch_num:Int=if(batch_num_per==1.0){
@@ -581,8 +625,7 @@ class Max_PoolLayer(input_size:(Int,Int),
                 //相当于MATLAB中的convn(next_layer.d_v,rot180(next_layer.W),'full'),即完成了2维的卷积运算
                 //其中 d_v(c)(tmp1+s)(tmp2+t) += next_layer.d_v(k)(tmp1)(tmp2) * next_layer.W(k)(c)(s)(t) 实现了convn(next_layer.d_v,next_layer.W,'full')
                 //把next_layer.W(k)(c)(s)(t)换为next_layer.W(k)(c)((next_layer.kernel_size._1-1)-s)((next_layer.kernel_size._2-1)-t) 实现了rot180
-                //d_v(c)(tmp1+s)(tmp2+t) += next_layer.d_v(k)(tmp1)(tmp2) * next_layer.W(k)(c)(s)(t) 
-                d_v(c)(tmp1+s)(tmp2+t) += next_layer.d_v(k)(tmp1)(tmp2) * next_layer.W(k)(c)((next_layer.kernel_size._1-1)-s)((next_layer.kernel_size._2-1)-t)
+                d_v(c)(tmp1+s)(tmp2+t) += next_layer.d_v(k)(tmp1)(tmp2) * next_layer.W(k)(c)((next_layer.kernel_size._1-1)-s)((next_layer.kernel_size._2-1)-t)//vision2 ok
                 //由于是max 所以没有 *dactivation_fun(input) 
                 
               }
