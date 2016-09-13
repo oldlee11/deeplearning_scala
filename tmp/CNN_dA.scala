@@ -216,7 +216,7 @@ def train_mnist_aft_pretrain() {
     val train_N: Int = train_X.length
     
     val rng: Random = new Random(123)
-    var learning_rate: Double = 0.1
+    var learning_rate: Double = 0.8
     val n_epochs: Int = 200
     
     //lenet5
@@ -231,7 +231,7 @@ def train_mnist_aft_pretrain() {
     for(epoch <- 0 until n_epochs) {
       print("epoch_"+epoch+":\n")
       classifier.train_batch(inputs_x=train_X, inputs_y=train_Y, lr=learning_rate, batch_num_per=0.01,alpha=0.1, save_module_path="",debug=false)
-      learning_rate *=0.99
+      //learning_rate *=0.99
     } 
     
     /*
@@ -285,10 +285,8 @@ def train_mnist_aft_pretrain() {
   }
 
   def main(args: Array[String]) {
-    //test_CNN_simple()//ok
-    //train_test_mnist()//--1层的ok
-    pre_train_mnist()
-    //train_mnist_aft_pretrain()
+    //pre_train_mnist()
+    train_mnist_aft_pretrain()
   }  
 
 }
