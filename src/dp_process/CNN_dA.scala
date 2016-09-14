@@ -194,8 +194,7 @@ def pre_train_mnist() {
     var learning_rate: Double = 0.1
     val n_epochs: Int = 200
     //lenet5
-    //val classifier = new  CNN_dA(input_size=(height,width),output_size=10,n_kernel_Array=Array(6,16,120),kernel_size_Array=Array((5,5),(5,5),(4,4)),pool_size_Array=Array((2,2),(2,2),(1,1)),n_channel=1,n_hidden=84,_rng=null,activation="ReLU",activation_mlp="tanh")
-    val classifier = new  CNN_dA(input_size=(height,width),output_size=10,n_kernel_Array=Array(30,50,120),kernel_size_Array=Array((5,5),(5,5),(4,4)),pool_size_Array=Array((2,2),(2,2),(1,1)),n_channel=1,n_hidden=84,_rng=null,activation="ReLU",activation_mlp="tanh")
+    val classifier = new  CNN_dA(input_size=(height,width),output_size=10,n_kernel_Array=Array(6,16,120),kernel_size_Array=Array((5,5),(5,5),(4,4)),pool_size_Array=Array((2,2),(2,2),(1,1)),n_channel=1,n_hidden=84,_rng=null,activation="ReLU",activation_mlp="tanh")
     classifier.pretrain_sda_all(train_X=train_X, lr=learning_rate, corruption_level=0.1, epochs=n_epochs,batch_num_per=0.1, save_module_path="D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//module_out//") 
 }  
 
@@ -287,7 +286,7 @@ def train_mnist_aft_pretrain() {
 
   def main(args: Array[String]) {
     pre_train_mnist()
-    //train_mnist_aft_pretrain()
+    train_mnist_aft_pretrain()
   }  
 
 }
