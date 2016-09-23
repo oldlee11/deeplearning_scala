@@ -4,11 +4,13 @@ import scala.util.Random
 import scala.math
 import scala.collection.mutable.ArrayBuffer    //用于建立可变的array
 
-class Dropout_parallel(n_in:Int,
-                       hidden_layer_sizes:Array[Int], 
+class Dropout_parallel(n_in_arg:Int,
+                       hidden_layer_sizes_arg:Array[Int], 
                        n_out:Int,
                        var rng: Random=null, 
                        activation:String="ReLU") {
+  val hidden_layer_sizes:Array[Int]=hidden_layer_sizes_arg
+  val n_in:Int=n_in_arg
   val n_layers:Int=hidden_layer_sizes.length
   
   // var hidden_layer_sizes: Array[Int] = new Array[Int](n_layers)
@@ -208,7 +210,7 @@ class Dropout_parallel(n_in:Int,
       }
     }
     //完成一批次训练后计算本批次的平均交叉嫡cross_entropy_result/batch_num (cross_entropy_result内部是累加的)
-    println("cross_entropy="+train_batch_result(n_layers)._4.reduce(_+_)/batch_num)   
+    println("cross_entropy="+train_batch_result.map(x=>x._3).reduce(_+_)/batch_num)   
   }
   
   
@@ -228,6 +230,19 @@ class Dropout_parallel(n_in:Int,
     }
     log_layer.predict(layer_input)
   }  
+
+  
+  /* for time debug
+   * */
+  var fun_begin_time:Long=0
+  def deal_begin_time()={
+    fun_begin_time=System.currentTimeMillis()
+  }
+  def deal_end_time(fun_name:String)={
+    print(fun_name+" use "+(System.currentTimeMillis()-fun_begin_time)+"毫秒\n")
+    fun_begin_time=0
+  }    
+  
 }
 
 object Dropout_parallel {
@@ -255,19 +270,20 @@ object Dropout_parallel {
       Array(0, 0,1)      
     )
     val n_out:Int=3
-    val classifier = new  Dropout_parallel(n_in=9,hidden_layer_sizes=Array(100,50), n_out=n_out,rng=null,activation="ReLU")//实验成果了   hiddenlayer.scala 初始化 val a: Double =1/ math.pow(n_out,0.25)    learning_rate *=0.9   lr=0.1
+    val classifier = new  Dropout_parallel(n_in_arg=9,hidden_layer_sizes_arg=Array(100,50), n_out=n_out,rng=null,activation="ReLU")//实验成果了   hiddenlayer.scala 初始化 val a: Double =1/ math.pow(n_out,0.25)    learning_rate *=0.9   lr=0.1
     val n_epochs:Int=50
     val train_N:Int=train_Y.length
     var learning_rate:Double=0.1
     // train
     var epoch: Int = 0
     var i: Int = 0
+    classifier.deal_begin_time()
     for(epoch <- 0 until n_epochs) {
       print("epoch_"+epoch+":\n")
       classifier.train_batch(inputs_x=train_X, inputs_y=train_Y, lr=learning_rate,alpha=0.9, dropout=true, p_dropout=0.1, batch_num_per=1.0,debug=true)
       learning_rate *=0.9
     }
-    
+    classifier.deal_end_time("train_batch")
      // test data
     val test_X: Array[Array[Double]] = Array(
       Array(1, 1, 1, 0, 0, 0,0,0,0),
@@ -310,7 +326,7 @@ object Dropout_parallel {
     val n_outs: Int = 10
     val hidden_layer_sizes: Array[Int] = Array(500, 500, 2000)
 
-    val classifier = new  Dropout_parallel(n_in=n_ins,hidden_layer_sizes=hidden_layer_sizes, n_out=n_outs,rng=rng,activation="ReLU")
+    val classifier = new  Dropout_parallel(n_in_arg=n_ins,hidden_layer_sizes_arg=hidden_layer_sizes, n_out=n_outs,rng=rng,activation="ReLU")
     
     //使用sda或dbn产生的w和b初始化hidden
     for(i <-0 until hidden_layer_sizes.length){
@@ -400,16 +416,17 @@ object Dropout_parallel {
     val n_outs: Int = 10
     val hidden_layer_sizes: Array[Int] = Array(500, 500, 2000)
 
-    val classifier = new  Dropout_parallel(n_in=n_ins,hidden_layer_sizes=hidden_layer_sizes, n_out=n_outs,rng=rng,activation="ReLU")
+    val classifier = new  Dropout_parallel(n_in_arg=n_ins,hidden_layer_sizes_arg=hidden_layer_sizes, n_out=n_outs,rng=rng,activation="ReLU")
 
     // train
     var epoch: Int = 0
+    classifier.deal_begin_time()
     for(epoch <- 0 until n_epochs) {
       print("epoch_"+epoch+":\n")
-      classifier.train_batch(inputs_x=train_X, inputs_y=train_Y, lr=learning_rate,alpha=0.9, dropout=true, p_dropout=0.1, batch_num_per=0.01)//lr=0.1  lr不变 迭代次数100 85.86%
+      classifier.train_batch(inputs_x=train_X, inputs_y=train_Y, lr=learning_rate,alpha=0.9, dropout=true, p_dropout=0.1, batch_num_per=0.01)//lr=0.1  lr不变 迭代次数100 86.22%
       //learning_rate = learning_rate*0.9
     }    
-    
+    classifier.deal_end_time("train_batch")
     /*
      * test
      * */
@@ -460,8 +477,8 @@ object Dropout_parallel {
     println(pred_right_nums.toDouble/(test_N.toDouble))
   }
   def main(args: Array[String]) {
-    //test_Dropout_simple()
+    //test_Dropout_simple()//串行使用543毫秒;并行使用387毫秒
     //train_tset_mnist_use_dbn_sda_dbn()
-    train_tset_mnist_dbn()
+    train_tset_mnist_dbn()//串行使用 毫秒;并行使用 毫秒
   }    
 }  
