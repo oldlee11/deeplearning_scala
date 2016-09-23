@@ -686,7 +686,7 @@ def train_test_mnist() {
     
     //lenet5
     val classifier = new  CNN_parallel(input_size=(height,width),output_size=10,n_kernel_Array=Array(6,16,120),kernel_size_Array=Array((5,5),(5,5),(4,4)),pool_size_Array=Array((2,2),(2,2),(1,1)),n_channel=1,n_hidden=84,_rng=null,activation="ReLU",activation_mlp="tanh")//200次迭代  lr=0.1  lr不变      91.2%
-                                                                                                                                                                                                                                                                             //400次迭代 96.4%
+                                                                                                                                                                                                                                                                             //400次迭代 96.08%
     
     // train
     var epoch: Int = 0
@@ -701,7 +701,7 @@ def train_test_mnist() {
      * */
     val filePath_test:String="D:/youku_work/python/spark_python_scala/scala/workpace/deeplearning/dataset/mnist/test_data.txt"  
     val test_X:Array[Array[Array[Array[Double]]]]=dp_utils.dataset.load_mnist(filePath_test).map(x=>{val tmp:Array[Array[Double]]=Array.ofDim[Double](height,width);for(i <- 0 until height){for(j <-0 until width){tmp(i)(j)=x._2(i*width+j)}};Array(tmp)})
-    val test_N: Int = 1000//test_X.length
+    val test_N: Int = test_X.length
     val test_Y_pred: Array[Array[Double]] = Array.ofDim[Double](test_N, 10)
     val test_Y: Array[Array[Int]]=dp_utils.dataset.load_mnist(filePath_test).map(x=>trans_int_to_bin(x._1))
     
