@@ -15,6 +15,14 @@ import javax.imageio.ImageIO;
 import scala.collection.mutable.ArrayBuffer    //用于建立可变的array
 
 
+  /**
+   * deeplearning with scala and spark
+   *
+   * Copyright liming(oldlee11)
+   * Email: oldlee11@163.com
+   * qq:568677413
+   */
+
 //一像素的rgb数据
 class pix_rgb_struct(i_in:Int,j_in:Int,rgb_in:Array[Int]){
   var i:Int=i_in;//像素的行位置
@@ -139,6 +147,26 @@ object gen_rgb {
       new pict_rgb_struct(width,heigth,rgb_valuse.toArray)
     }  
     
+    //strin-->array  
+    def split_rgb_line2(str_in:String):Array[Array[Array[Double]]]={
+      val str_in_split1:Array[String]=str_in.split("\t")(1).split("=sep=")
+      val width=Integer.parseInt(str_in_split1(0).split(",")(0))
+      val heigth=Integer.parseInt(str_in_split1(0).split(",")(1))
+      val result:Array[Array[Array[Double]]]=Array.ofDim[Double](3,heigth,width)
+      val str_in_split2:Array[String]=str_in_split1(1).split(",")
+      for (j:Int <- 0 to (heigth-1)) {
+        for (i:Int <- 0 to (width-1)) {  
+          val pixel = str_in_split2(j*width+i).toInt;           
+          val rgb_array=Array((pixel & 0xff0000) >> 16, (pixel & 0xff00) >> 8,pixel & 0xff)
+          result(0)(j)(i)=rgb_array(0).toDouble/255.0
+          result(1)(j)(i)=rgb_array(1).toDouble/255.0
+          result(2)(j)(i)=rgb_array(2).toDouble/255.0
+        }  
+      } 
+      result
+    }  
+    
+        
     //给定一个目录 
     //返回里面文件的列表
     def subdirs2(dir: File): Iterator[File] = { 
@@ -197,5 +225,10 @@ object gen_rgb {
          * */ 
         //gen_hdfs_txt("D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//train//lfw_5590","D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//hdfs//lfw_5590.txt")
         //gen_hdfs_txt("D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//train//net_7876","D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//hdfs//net_7876.txt")         
+        gen_hdfs_txt("D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//train//lfw_5590//train//female","D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//hdfs//lfw_5590_female_train.txt") 
+        gen_hdfs_txt("D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//train//lfw_5590//train//male","D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//hdfs//lfw_5590_male_train.txt") 
+        gen_hdfs_txt("D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//train//lfw_5590//test//female","D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//hdfs//lfw_5590_female_test.txt") 
+        gen_hdfs_txt("D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//train//lfw_5590//test//male","D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//hdfs//lfw_5590_male_test.txt")         
+
     }    
 }

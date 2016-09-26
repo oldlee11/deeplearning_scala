@@ -3,6 +3,14 @@ package dp_utils
 import scala.io.Source
 import scala.collection.mutable.ArrayBuffer    //用于建立可变的array
 
+  /**
+   * deeplearning with scala and spark
+   *
+   * Copyright liming(oldlee11)
+   * Email: oldlee11@163.com
+   * qq:568677413
+   */
+
 object dataset {
   def readtxt(filePath:String):Array[String]={
     var result:ArrayBuffer[String]=ArrayBuffer();

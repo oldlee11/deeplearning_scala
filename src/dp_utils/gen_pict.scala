@@ -3,6 +3,14 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import javax.imageio.ImageIO;
 
+  /**
+   * deeplearning with scala and spark
+   *
+   * Copyright liming(oldlee11)
+   * Email: oldlee11@163.com
+   * qq:568677413
+   */
+
 object gen_pict{
   //使用RGB数据组成图片
   /*
