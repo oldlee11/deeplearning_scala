@@ -8,6 +8,14 @@ import java.io._
 import scala.io.Source
 
 
+  /**
+   * deeplearning with scala and spark
+   *
+   * Copyright liming(oldlee11)
+   * Email: oldlee11@163.com
+   * qq:568677413
+   */
+
 //主要思路  使用dA做非监督学习精选数据降维,提取特征
 //在使用监督学习训练输出层LR
 class SdA(val n_ins: Int, hidden_layer_sizes: Array[Int], val n_outs: Int, val n_layers:Int, var rng: Random=null) {

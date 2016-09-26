@@ -5,6 +5,16 @@ import scala.math
 
 import scala.collection.mutable.ArrayBuffer    //用于建立可变的array
 
+
+  /**
+   * deeplearning with scala and spark
+   *
+   * Copyright liming(oldlee11)
+   * Email: oldlee11@163.com
+   * qq:568677413
+   */
+   
+   
 class Dropout(val n_in:Int, hidden_layer_sizes:Array[Int], n_out:Int,var rng: Random=null, val activation:String="ReLU") {
   var input_size: Int = 0
   val n_layers:Int=hidden_layer_sizes.length

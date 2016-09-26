@@ -9,6 +9,14 @@ import scala.io.Source
 
 import scala.collection.mutable.ArrayBuffer    //用于建立可变的array
 
+  /**
+   * deeplearning with scala and spark
+   *
+   * Copyright liming(oldlee11)
+   * Email: oldlee11@163.com
+   * qq:568677413
+   */
+
 //默认使用sigmoid
 class HiddenLayer(val n_in: Int, val n_out: Int, _W: Array[Array[Double]], _b: Array[Double], var rng: Random=null,val activation:String="sigmoid") {
   

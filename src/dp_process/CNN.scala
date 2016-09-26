@@ -9,6 +9,15 @@ import scala.io.Source
 
 import scala.collection.mutable.ArrayBuffer    //用于建立可变的array
 
+  /**
+   * deeplearning with scala and spark
+   *
+   * Copyright liming(oldlee11)
+   * Email: oldlee11@163.com
+   * qq:568677413
+   */
+
+
 /*
  * input_size           处理图片的长和高
  * n_channel            图片组成的个数,一般一个图片是以RGB形式给出的,所以一般=3

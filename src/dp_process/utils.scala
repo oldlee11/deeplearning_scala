@@ -2,6 +2,14 @@ package dp_process
 import scala.util.Random
 import scala.math
 
+  /**
+   * deeplearning with scala and spark
+   *
+   * Copyright liming(oldlee11)
+   * Email: oldlee11@163.com
+   * qq:568677413
+   */
+
 object utils {
 
 def sigmoid(x: Double): Double = 1.0 / (1.0 + math.pow(math.E, -x))

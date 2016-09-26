@@ -9,6 +9,14 @@ import scala.io.Source
 
 import scala.collection.mutable.ArrayBuffer    //用于建立可变的array
 
+  /**
+   * deeplearning with scala and spark
+   *
+   * Copyright liming(oldlee11)
+   * Email: oldlee11@163.com
+   * qq:568677413
+   */
+
 class LogisticRegression(val n_in: Int, val n_out: Int) {
   val d_y: Array[Double] = new Array[Double](n_out)//局部梯度
   

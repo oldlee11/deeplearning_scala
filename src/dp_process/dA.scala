@@ -16,7 +16,15 @@ import scala.io.Source
 
 import scala.collection.mutable.ArrayBuffer    //用于建立可变的array
 
-
+  /**
+   * deeplearning with scala and spark
+   *
+   * Copyright liming(oldlee11)
+   * Email: oldlee11@163.com
+   * qq:568677413
+   */
+   
+   
 /*
  * n_visible:可视层的单元个数
  * n_hidden:隐藏层的单元个数

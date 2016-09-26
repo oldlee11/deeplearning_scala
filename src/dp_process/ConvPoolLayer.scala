@@ -8,6 +8,13 @@ import java.io.File;
 import java.io._
 import scala.io.Source
 
+  /**
+   * deeplearning with scala and spark
+   *
+   * Copyright liming(oldlee11)
+   * Email: oldlee11@163.com
+   * qq:568677413
+   */
 
 /*
  * 卷积层

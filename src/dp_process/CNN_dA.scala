@@ -8,6 +8,14 @@ import java.io.File;
 import java.io._
 import scala.io.Source
 
+  /**
+   * deeplearning with scala and spark
+   *
+   * Copyright liming(oldlee11)
+   * Email: oldlee11@163.com
+   * qq:568677413
+   */
+   
 class CNN_dA(input_size:(Int,Int),
           output_size:Int,
           n_kernel_Array:Array[Int],
