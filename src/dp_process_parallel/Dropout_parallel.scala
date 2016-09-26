@@ -4,6 +4,16 @@ import scala.util.Random
 import scala.math
 import scala.collection.mutable.ArrayBuffer    //用于建立可变的array
 
+
+  /**
+   * deeplearning with scala and spark
+   *
+   * Copyright liming(oldlee11)
+   * Email: oldlee11@163.com
+   * qq:568677413
+   */
+   
+   
 class Dropout_parallel(n_in_arg:Int,
                        hidden_layer_sizes_arg:Array[Int], 
                        n_out:Int,

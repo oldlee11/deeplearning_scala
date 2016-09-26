@@ -9,6 +9,14 @@ import java.io._
 import scala.io.Source
 
 
+  /**
+   * deeplearning with scala and spark
+   *
+   * Copyright liming(oldlee11)
+   * Email: oldlee11@163.com
+   * qq:568677413
+   */
+
 /*
  * ConvPoolLayer=ConvLayer=>Max_PoolLayer
  * input_size_in:conv卷积层输入
