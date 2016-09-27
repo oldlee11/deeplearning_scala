@@ -23,23 +23,6 @@ import scala.collection.mutable.ArrayBuffer    //用于建立可变的array
    * qq:568677413
    */
 
-//一像素的rgb数据
-class pix_rgb_struct(i_in:Int,j_in:Int,rgb_in:Array[Int]){
-  var i:Int=i_in;//像素的行位置
-  var j:Int=j_in;//像素的列位置
-  var rgb:Array[Int]=rgb_in;
-}
-
-
-//一个图片的rgb数据
-class pict_rgb_struct(width_in:Int,heigth_in:Int,rgb_values_in:Array[pix_rgb_struct]){
-  var width:Int=width_in;
-  var heigth:Int=heigth_in;
-  var rgb_values:Array[pix_rgb_struct]=rgb_values_in;
-}
-
-
-
 object gen_rgb {
     /* 方案1:在本机处理图片   
     //jpg->rbm
@@ -105,6 +88,7 @@ object gen_rgb {
     /*方案2 在集群处理图片*/
     //image=本机图片的地址
     //输出 宽+高+没有处理的pixel数据组成的字符串  由行到列排列
+    //width,hitght=sep=rgb.......
     //533,800=sep=-16745537,-16745794,-16746051,-16746565,-16747335,-16748105,-16748364,........
     def getImagePixel(image:String):String={ 
       try {        
@@ -114,12 +98,11 @@ object gen_rgb {
         val height:Int = bi.getHeight();  
         val minx:Int = bi.getMinX();  
         val miny:Int = bi.getMinY();  
-        var RGB_result:ArrayBuffer[Int]=ArrayBuffer();
+        var RGB_result:Array[Int]=new Array((width-minx)*(height-miny));
         var tmp_rgb_i:String="";
-        for (i:Int <- minx to (width-1)) {  
-            for (j:Int <- miny to (height-1)) {
-                val pixel = bi.getRGB(i,j);
-                RGB_result += pixel;
+        for (i:Int <- minx until width) {  
+            for (j:Int <- miny until height) {
+                RGB_result(j*(width-minx)+i) = bi.getRGB(i,j);
             }  
         } 
         width+","+height+"=sep="+RGB_result.mkString(sep=",")
@@ -128,39 +111,28 @@ object gen_rgb {
 		  }              
     }
     
-    //str_in="533,800=sep=-16745537,-16745794,-16746051,-16746565,-16747335,-16748105,-16748364,........"
-    //输出=一个 pict_rgb_struct数据结构
-    def split_rgb_line(str_in:String):pict_rgb_struct={
-      val str_in_split1:Array[String]=str_in.split("=sep=")
-      val width=Integer.parseInt(str_in_split1(0).split(",")(0))
-      val heigth=Integer.parseInt(str_in_split1(0).split(",")(1))
-      val str_in_split2:Array[String]=str_in_split1(1).split(",")
-      val rgb_valuse:ArrayBuffer[pix_rgb_struct]=ArrayBuffer()
-      for(i <-0 until width){
-        for(j<- 0 until heigth){
-          val pixel=str_in_split2(i*width+j).toInt
-          val rgb_array=Array((pixel & 0xff0000) >> 16, (pixel & 0xff00) >> 8,pixel & 0xff)
-          val rgb_valuse_i_j:pix_rgb_struct=new pix_rgb_struct(i_in=i,j_in=j,rgb_in=rgb_array) 
-          rgb_valuse += rgb_valuse_i_j
-        }
-      }
-      new pict_rgb_struct(width,heigth,rgb_valuse.toArray)
-    }  
-    
+    //str_in="533,800=sep=-16745537,-16745794,-16746051,-16746565,-16747335,-16748105,-16748364,........" 
     //strin-->array  
-    def split_rgb_line2(str_in:String):Array[Array[Array[Double]]]={
-      val str_in_split1:Array[String]=str_in.split("\t")(1).split("=sep=")
-      val width=Integer.parseInt(str_in_split1(0).split(",")(0))
-      val heigth=Integer.parseInt(str_in_split1(0).split(",")(1))
+    /*输出=Array[//第几个channel
+            Array[//像素位置:第几行
+              Array[Double]//像素位置:第几列
+            ]
+          ]
+    * 
+    */
+    def split_rgb_line(str_in:String,max_value:Double=255.0):Array[Array[Array[Double]]]={
+      val str_in_split1:Array[String]=str_in.split("=sep=")
+      val width=str_in_split1(0).split(",")(0).toInt
+      val heigth=str_in_split1(0).split(",")(1).toInt
       val result:Array[Array[Array[Double]]]=Array.ofDim[Double](3,heigth,width)
       val str_in_split2:Array[String]=str_in_split1(1).split(",")
-      for (j:Int <- 0 to (heigth-1)) {
-        for (i:Int <- 0 to (width-1)) {  
+      for(j<- 0 until heigth){ 
+        for(i <-0 until width){
           val pixel = str_in_split2(j*width+i).toInt;           
           val rgb_array=Array((pixel & 0xff0000) >> 16, (pixel & 0xff00) >> 8,pixel & 0xff)
-          result(0)(j)(i)=rgb_array(0).toDouble/255.0
-          result(1)(j)(i)=rgb_array(1).toDouble/255.0
-          result(2)(j)(i)=rgb_array(2).toDouble/255.0
+          result(0)(j)(i)=rgb_array(0).toDouble/max_value
+          result(1)(j)(i)=rgb_array(1).toDouble/max_value
+          result(2)(j)(i)=rgb_array(2).toDouble/max_value
         }  
       } 
       result
@@ -175,14 +147,25 @@ object gen_rgb {
 		  f ++ d.toIterator.flatMap(subdirs2)
 	  } 
     
-    //把jpg数据解析为rbm并生产hdfs使用的txt文件
+    //把一个目录下的多个jpg文件解析为rbm并生产hdfs使用的txt文件
+    //533,800=sep=-16745537,-16745794,-16746051,-16746565,-16747335,-16748105,-16........
     def gen_hdfs_txt(dir:String,out_file_path:String)={
       val jpgs=subdirs2(new File(dir))
       val writer = new PrintWriter(new File(out_file_path))
-      jpgs.foreach(x => {val jpg_full_name=x.toPath().toString();val jpg_name_tmp=jpg_full_name.split("//");val jpg_name=jpg_name_tmp(jpg_name_tmp.length-1);writer.write(jpg_name+"\t"+getImagePixel(jpg_full_name));writer.write("\n");println(jpg_name)})
+      jpgs.foreach(x => {val jpg_full_name=x.toPath().toString();writer.write(getImagePixel(jpg_full_name));writer.write("\n");println(jpg_full_name)})
       writer.close()         
     }
-  
+    //把多个目录下的多个jpg文件解析为rbm并生产hdfs使用的txt文件
+    def gen_hdfs_txts(dirs:Array[String],out_file_path:String)={
+      val writer = new PrintWriter(new File(out_file_path))
+      for (dir <- dirs){
+        val jpgs=subdirs2(new File(dir))
+        jpgs.foreach(x => {val jpg_full_name=x.toPath().toString();writer.write(getImagePixel(jpg_full_name));writer.write("\n");println(jpg_full_name)})  
+      }      
+      writer.close() 
+    }
+    
+    
     /** 
      * @param args 
      */  
@@ -194,30 +177,26 @@ object gen_rgb {
         var demo:String=getImagePixel("D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//test//001.jpg"); 
         println(demo.substring(0, 200)) 
         //rgb 取值为 0-255
-        //width    height         行                    列                    rgb                            行                   列           rgb            ........
-        //533=sep1=800=sep1=0=sep3=0=sep3=0=sep4=123=sep4=191=sep2=0=sep3=1=sep3=0=sep4=122=sep4=190=sep2=0=sep3=2=sep3=0=sep4=121=sep4=189=sep2=0=sep3=3=sep3=0=sep4=119=sep4=187=sep2=0=sep3=4=sep3=0=sep4=116=s
-
+        //533,800=sep=-16745537,-16745794,-16746051,-16746565,-16747335,-16748105,-16........
         
         /*
          * test for split_rgb_line   测试解析getImagePixel输出的文本数据  用于hdfs读取
          * */       
         val demo2=split_rgb_line(demo)
-        println("width="+demo2.width)
-        println("height="+demo2.heigth)
+        val height=demo2(0).length
+        val width=demo2(0)(0).length
+        println("width="+width)
+        println("height="+height)
         println("rgb:")
-        var rgb_tmp= new pix_rgb_struct(0,0,Array())
         for(i <-0 to 10){
-          rgb_tmp=demo2.rgb_values(i);
-          println("i="+rgb_tmp.i+",j="+rgb_tmp.j+",rgb=("+rgb_tmp.rgb.mkString(sep=",")+")")
+          for(j<-0 until demo2(0)(0).length){
+            println("i="+i+",j="+j+",rgb=("+demo2(0)(i)(j)+","+demo2(1)(i)(j)+","+demo2(2)(i)(j)+")")
+          }
         }
-        /*width=533
-          height=800
-          rgb:
-          i=0,j=0,rgb=(0,123,191)
-          i=0,j=1,rgb=(0,122,190)
-          i=0,j=2,rgb=(0,121,189)
-          .........
-         */
+        dp_utils.gen_pict.gen_pict_fun(dp_utils.gen_pict.img_flatten_2d_to_1d(demo2(0)).map(x=>(x*255).toInt),
+                                       dp_utils.gen_pict.img_flatten_2d_to_1d(demo2(1)).map(x=>(x*255).toInt),
+                                       dp_utils.gen_pict.img_flatten_2d_to_1d(demo2(2)).map(x=>(x*255).toInt),
+                                       width=width,height=height,jpg_out_path="D:/youku_work/python/spark_python_scala/scala/workpace/deeplearning/test/001_split_rgb_line_out.jpg")
         
         /*
          * test for gen_hdfs_txt   用于在本地把jpg图片转化为rgb形式的数据字符串(每个图片一行数据),用于存入hdfs内  
@@ -225,10 +204,11 @@ object gen_rgb {
          * */ 
         //gen_hdfs_txt("D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//train//lfw_5590","D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//hdfs//lfw_5590.txt")
         //gen_hdfs_txt("D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//train//net_7876","D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//hdfs//net_7876.txt")         
-        gen_hdfs_txt("D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//train//lfw_5590//train//female","D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//hdfs//lfw_5590_female_train.txt") 
-        gen_hdfs_txt("D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//train//lfw_5590//train//male","D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//hdfs//lfw_5590_male_train.txt") 
-        gen_hdfs_txt("D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//train//lfw_5590//test//female","D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//hdfs//lfw_5590_female_test.txt") 
-        gen_hdfs_txt("D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//train//lfw_5590//test//male","D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//hdfs//lfw_5590_male_test.txt")         
+        //gen_hdfs_txt("D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//train//lfw_5590//train//female","D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//hdfs//lfw_5590_female_train.txt") 
+        //gen_hdfs_txt("D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//train//lfw_5590//train//male","D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//hdfs//lfw_5590_male_train.txt") 
+        gen_hdfs_txts(Array("D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//train//lfw_5590//train_min//female","D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//train//lfw_5590//train_min//male"),"D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//hdfs//lfw_5590_train_min.txt") 
+        //gen_hdfs_txt("D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//train//lfw_5590//test//female","D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//hdfs//lfw_5590_female_test.txt") 
+        //gen_hdfs_txt("D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//train//lfw_5590//test//male","D://youku_work//python//spark_python_scala//scala//workpace//deeplearning//dataset//dataset_face//hdfs//lfw_5590_male_test.txt")         
 
     }    
 }

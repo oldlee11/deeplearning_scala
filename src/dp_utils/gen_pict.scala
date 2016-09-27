@@ -46,6 +46,18 @@ object gen_pict{
     1
   }
   
+  def img_flatten_2d_to_1d(img_data:Array[Array[Double]]):Array[Double]={
+    val rows=img_data.length
+    val cols=img_data(0).length
+    val result:Array[Double]=new Array(rows*cols)
+    for(i<-0 until rows){
+      for(j<-0 until cols){
+        result(i*cols+j)=img_data(i)(j)
+      }  
+    }
+    result
+  }
+  
   //仅仅使用一组数据,并设置为RGM的一种 其余=255 组成图片
   /*
    * data_in 像素的值,范围在[0,255]之间
