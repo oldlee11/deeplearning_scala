@@ -1,4 +1,5 @@
 package dp_process_parallel
+import scala.collection.mutable.ArrayBuffer    //用于建立可变的array
 
   /**
    * deeplearning with scala and spark
@@ -18,24 +19,11 @@ object test {
      * train
      * 
      * */
-    var filePath_female:String="D:/youku_work/python/spark_python_scala/scala/workpace/deeplearning/dataset/dataset_face/hdfs/lfw_5590_female_train.txt"
-    var filePath_male:String="D:/youku_work/python/spark_python_scala/scala/workpace/deeplearning/dataset/dataset_face/hdfs/lfw_5590_male_train.txt"
-    /*
-    val read_datas_female=dp_utils.dataset.readtxt(filePath_female)
-    val read_datas_male=dp_utils.dataset.readtxt(filePath_male)
-    var train_female_x:Array[Array[Array[Array[Double]]]]=read_datas_female.map(x=>dp_utils.gen_rgb.split_rgb_line2(x))
-    var train_male_x:Array[Array[Array[Array[Double]]]]=read_datas_male.map(x=>dp_utils.gen_rgb.split_rgb_line2(x))
-    var train_female_y:Array[Int]=new Array(train_female_x.length)
-    var train_male_y:Array[Int]=new Array(train_male_x.length)
-    for(i <-0 until train_male_x.length){
-      train_male_y(i)=1
-    }
-    val train_X=train_female_x++train_male_x
-    val train_Y=(train_female_y++train_male_y).map(x=>Array(x))
-    val train_N: Int = train_X.length
-    */
-    val females=975
-    val train_X=dp_utils.dataset.readtxt(filePath_female).map(x=>dp_utils.gen_rgb.split_rgb_line2(x)) ++ dp_utils.dataset.readtxt(filePath_male).map(x=>dp_utils.gen_rgb.split_rgb_line2(x))
+    val filePath_tain:String="D:/youku_work/python/spark_python_scala/scala/workpace/deeplearning/dataset/dataset_face/hdfs/lfw_5590_train_min.txt"
+    val train_X=dp_utils.dataset.readtxt(filePath_tain).map(x=>dp_utils.gen_rgb.split_rgb_line(x))
+    
+    val females=500
+    val males=500
     val train_Y_init:Array[Int]=new Array(train_X.length)
     for(i <-0 until females){
       train_Y_init(i)=1
