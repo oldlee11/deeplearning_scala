@@ -1,12 +1,10 @@
 # deeplearning_scala
 deeplearning with scala(2.10.6)  java-SE 1.8
-/**
   * deeplearning with scala and spark
   *
   * Copyright liming(oldlee11)
   * Email: oldlee11@163.com
   * qq:568677413
-*/
    
 <一> src/dp_process/* include :(基本方式实现)  
 
