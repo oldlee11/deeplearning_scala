@@ -29,7 +29,6 @@ do labs with minst dataset
 
 src/dp_process_parallel/* include : Dropout(mlp) and CNN with parallel code
 
-
 do labs with minst dataset 
 
     Dropout(mlp):86.22%,CNN(lenet5):96.08%
