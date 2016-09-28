@@ -26,7 +26,11 @@ src/dp_process/* include :(基本方式实现)
 
 do labs with minst dataset 
 
-    sdA:88.17%,DBN:88.7%,CNN(lenet5):90.3%
+    sdA:88.17%
+    
+    DBN:88.7%
+    
+    CNN(lenet5):90.3%
 
 
 src/dp_process_parallel/* include :（串行方式实现） 
@@ -37,4 +41,6 @@ src/dp_process_parallel/* include :（串行方式实现）
 
 do labs with minst dataset 
 
-    Dropout(mlp):86.22%,CNN(lenet5):96.08%
+    Dropout(mlp):86.22%
+    
+    CNN(lenet5):96.08%
