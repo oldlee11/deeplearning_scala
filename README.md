@@ -1,7 +1,7 @@
 # deeplearning_scala
 deeplearning with scala(2.10.6)  java-SE 1.8
 
-src/dp_process/* include :(基本方式实现)  
+<一> src/dp_process/* include :(基本方式实现)  
 
     LogisticRegression(逻辑回归层softmax输出)
     
@@ -33,7 +33,7 @@ do labs with minst dataset
     CNN(lenet5):90.3%
 
 
-src/dp_process_parallel/* include :（串行方式实现） 
+<二> src/dp_process_parallel/* include :（串行方式实现） 
 
     Dropout_parallel=多个HiddenLayer_parallel+LogisticRegression_parallel
     
