@@ -20,7 +20,7 @@ import scala.collection.mutable.ArrayBuffer    //用于建立可变的array
  */
  
 /* 
- * 大致示意图-1(每个时刻的mlp均有输出)
+ * 大致示意图-1(每个时刻的mlp均有输出    _RNN_structure='full')
  * 
  *                   |        MLP(k-1)         |        MLP(k-1)        ... ...         MLP(last)       |  
  *                   |                         |                         |   |                          | 
@@ -43,7 +43,7 @@ import scala.collection.mutable.ArrayBuffer    //用于建立可变的array
  * 
  * 
  * 
- * 大致示意图-2(只在最后时刻的mlp有输出)
+ * 大致示意图-2(只在最后时刻的mlp有输出     _RNN_structure='one')
  * 
  *                   |        MLP(k-1)         |        MLP(k-1)        ... ...         MLP(last)       |  
  *                   |                         |                         |   |                          | 
@@ -218,12 +218,10 @@ class RNN_HiddenLayer(_n_in:Int,
     //计算参数的更新大小    (最后输出)
     val W_add_tmp:Array[Array[Double]]=Array.ofDim[Double](n_out, n_in)//W的更新大小
     val b_add_tmp:Array[Double]=new Array[Double](n_out)//b的更新大小
-    val W_hh_add_tmp:Array[Array[Double]]=Array.ofDim[Double](n_out, n_in)//W的更新大小
+    val W_hh_add_tmp:Array[Array[Double]]=Array.ofDim[Double](n_out, n_out)//W的更新大小
     val b_hh_add_tmp:Array[Double]=new Array[Double](n_out)//b的更新大小    
     //局部梯度 d_v=sum(下一层的d_v*下一层的w)*(样本input经过本层后的线性输出值,在带入activation的导数中)
     //不论下一层是logistic还是hidden都一样的逻辑
-    val next_layer_n_out:Int=next_layer_w.length
-    val next_layer_n_in:Int =next_layer_w(0).length
     for(j <- 0 until n_out){
       /*
        * 计算dv
@@ -236,7 +234,7 @@ class RNN_HiddenLayer(_n_in:Int,
       //计算nextlayer部分的dv
       if(is_last_layer==false){
         //如果 该隐层层后面有接logistics输出层或接其他的hidden隐层,则计算nextlayer部分的dv,并计入最后的d_v
-        for(i <-0 until next_layer_n_out){
+        for(i <-0 until next_layer_w.length){
           d_v(j) += next_layer_w(i)(j)*next_layer_dv(i)  
         }
       }
@@ -265,7 +263,7 @@ class RNN_HiddenLayer(_n_in:Int,
         //如果是第一个状态t0 则 不做W_hh和b_hh的更新,
         //最后W_hh_add_tmp和b_hh_add_tmp内部的元素均为0.0
         for(k <- 0 until n_out){
-          W_hh_add_tmp(j)(k) = pre_time_hidden_input(k) * d_v(j)
+          W_hh_add_tmp(j)(k) = pre_time_hidden_input(k) * d_v(j) 
         }
         b_hh_add_tmp(j)=1.0*d_v(j)  
       }
@@ -330,14 +328,16 @@ class RNN_HiddenLayer(_n_in:Int,
   }  
   //初始化清空系数w 
   def init_w_module():Unit={
-    val a: Double = 4 * math.sqrt(6.0/(n_in + n_out))
+    //val a: Double = 4 * math.sqrt(6.0/(n_in + n_out))
+    val a: Double =1/ math.pow(n_out,0.25)
     for(i <- 0 until n_out) 
       for(j <- 0 until n_in) 
         W(i)(j) = uniform(-a, a) 
     for(i <- 0 until n_out) b(i) = 0        
   }    
   def init_whh_module():Unit={
-    val a: Double = 4 * math.sqrt(6.0/(n_out + n_out))
+    //val a: Double = 4 * math.sqrt(6.0/(n_out + n_out))
+    val a: Double =1/ math.pow(n_out,0.25)
     for(i <- 0 until n_out) 
       for(j <- 0 until n_out) 
         W_hh(i)(j) = uniform(-a, a) 

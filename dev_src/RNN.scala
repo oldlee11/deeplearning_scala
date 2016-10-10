@@ -2,6 +2,7 @@ package dp_process
 
 import scala.util.Random
 import scala.math
+import scala.math.round
 
 import scala.collection.mutable.ArrayBuffer    //用于建立可变的array
 
@@ -15,7 +16,7 @@ import scala.collection.mutable.ArrayBuffer    //用于建立可变的array
    */
 
 /* 
- * 大致示意图-1(每个时刻的mlp均有输出)
+ * 大致示意图-1(每个时刻的mlp均有输出     _RNN_structure='full')
  * 
  *                   |        MLP(k-1)         |        MLP(k-1)        ... ...         MLP(last)       |  
  *                   |                         |                         |   |                          | 
@@ -38,7 +39,7 @@ import scala.collection.mutable.ArrayBuffer    //用于建立可变的array
  * 
  * 
  * 
- * 大致示意图-2(只在最后时刻的mlp有输出)
+ * 大致示意图-2(只在最后时刻的mlp有输出   _RNN_structure='one')
  * 
  *                   |        MLP(k-1)         |        MLP(k-1)        ... ...         MLP(last)       |  
  *                   |                         |                         |   |                          | 
@@ -93,16 +94,16 @@ import scala.collection.mutable.ArrayBuffer    //用于建立可变的array
  * _hidden_layer_sizes 各个隐层层的个数
  * _n_out 输出层个数  
  * _win_times  时间框  即win_times
- * RNN_type RNN网络形态=full 表示每个时间状态的输入均对应一个输出,即每个时间状态的mlp均有输出
- *                  =one  表示一个输入序列(多个时间状态的输入)对应一个输出,即仅在最后时间状态的mlp才有输出
+ * _RNN_structure RNN网络形态=full 表示每个时间状态的输入均对应一个输出,即每个时间状态的mlp均有输出
+ *                        =one  表示一个输入序列(多个时间状态的输入)对应一个输出,即仅在最后时间状态的mlp才有输出
  * */
 class RNN(_n_in:Int, 
-              _hidden_layer_sizes:Array[Int], 
-              _n_out:Int,
-              _win_times:Int,
-              RNN_type:String="full",
-              _rng: Random=null,
-              activation:String="sigmoid") {
+          _hidden_layer_sizes:Array[Int], 
+          _n_out:Int,
+          _win_times:Int,
+          _RNN_structure:String="one",
+          _rng: Random=null,
+          activation:String="sigmoid") {
 
   
   /**************** 
@@ -114,6 +115,7 @@ class RNN(_n_in:Int,
   val hidden_layer_sizes:Array[Int]=_hidden_layer_sizes
   val win_times:Int=_win_times
   val n_layers:Int=hidden_layer_sizes.length
+  val RNN_structure:String=_RNN_structure
   //缓存正向传播的结果数据(每个时间状态的都有缓存,所以是win_times个)
   val forward_results:Array[(Array[Double],Array[Double])]=new Array(win_times)
   //缓存反向传播的结果数据(每个时间状态的都有缓存,所以是win_times个)
@@ -239,7 +241,15 @@ class RNN(_n_in:Int,
    *   pre_time_layers_output 是前一个时间的各个hidden的输出
    *   is_last_time    是否是最后一个时间状态
    *   next_time_dv              同一层的上一时刻的局部梯度dv
-   *   is_backward_for_loglayer   是否对loglayer做向后传播
+   *   is_backward_for_loglayer   是否对loglayer做向后传播 如果=false 即无log反向传播 则y可以为null
+   * 
+   * 输出
+   *   layers_train_W_add_tmp     每个hidden和log,在训练了一个样本后的w增量
+   *   layers_train_b_add_tmp     每个hidden和log,在训练了一个样本后的b增量
+   *   layers_train_W_hh_add_tmp  每个hidden,在训练了一个样本后的w_hh增量
+   *   layers_train_b_hh_add_tmp  每个hidden,在训练了一个样本后的b_hh增量
+   *   layers_train_dv            每个hidden,在训练了一个样本后的局部梯度
+   *   train_cross_entropy_result
    * 
    *   例如下面一个结构:2层hidden + 1层log
    *   
@@ -251,15 +261,15 @@ class RNN(_n_in:Int,
    *        \/
    *   hidden_layer[1]
    *        ||----------------------------------经过hidden1层反向传播后的局部梯度变化(一个样本的更新):layers_train_W_add_tmp[1],layers_train_b_add_tmp[1],,layers_train_W_hh_add_tmp[1],layers_train_b_hh_add_tmp[1]
-   *        ||
+   *        ||                                  layers_train_dv[1]
    *        \/
    *   hidden_layer[0]
    *        ||----------------------------------经过hidden0层反向传播后的局部梯度变化(一个样本的更新):layers_train_W_add_tmp[0],layers_train_b_add_tmp[0],layers_train_W_hh_add_tmp[0],layers_train_b_hh_add_tmp[0]
-   *        ||
+   *        ||                                  layers_train_dv[0]
    *        \/
    *   input(n_in个神经元)
    ****************/
-  def backward_one_time(y:Array[Int],
+  def backward_one_time(y:Array[Int]=null,
                         layer_inputs:Array[Array[Double]],
                         layer_doutputs:Array[Array[Double]],
                         dropout_masks:Array[Array[Double]],
@@ -268,21 +278,21 @@ class RNN(_n_in:Int,
                         is_last_time:Boolean,
                         next_time_dv:Array[Array[Double]],
                         is_backward_for_loglayer:Boolean,
-                        dropout:Boolean=true):(Array[Array[Array[Double]]],Array[Array[Double]],Array[Array[Array[Double]]],Array[Array[Double]])={
+                        dropout:Boolean=true):(Array[Array[Array[Double]]],Array[Array[Double]],Array[Array[Array[Double]]],Array[Array[Double]],Array[Array[Double]],Double)={
     /*
      * 初始化输出数据
      * */
-    val layers_train_W_add_tmp:ArrayBuffer[Array[Array[Double]]]=ArrayBuffer()//每一层的局部梯度w_add_tmp
-    val layers_train_b_add_tmp:ArrayBuffer[Array[Double]]=ArrayBuffer()//每一层的局部梯度b_add_tmp 
-    val layers_train_W_hh_add_tmp:ArrayBuffer[Array[Array[Double]]]=ArrayBuffer()//每一层的局部梯度W_hh_add_tmp
-    val layers_train_b_hh_add_tmp:ArrayBuffer[Array[Double]]=ArrayBuffer()//每一层的局部梯度h_hh_add_tmp
-    
+    val layers_train_W_add_tmp:ArrayBuffer[Array[Array[Double]]]=ArrayBuffer()//每一层的参数增量w_add_tmp
+    val layers_train_b_add_tmp:ArrayBuffer[Array[Double]]=ArrayBuffer()//每一层的参数增量b_add_tmp 
+    val layers_train_W_hh_add_tmp:ArrayBuffer[Array[Array[Double]]]=ArrayBuffer()//每一层的参数增量W_hh_add_tmp
+    val layers_train_b_hh_add_tmp:ArrayBuffer[Array[Double]]=ArrayBuffer()//每一层的参数增量h_hh_add_tmp
+    val layers_train_dv:ArrayBuffer[Array[Double]]=ArrayBuffer()//每一层的局部梯度dv
     /*
      * step1 backward log_layer
      */
     var log_backward_result:(Array[Array[Double]],Array[Double],Array[Double],Double)=null
     var train_cross_entropy_result:Double=0.0
-    if(is_backward_for_loglayer==false){
+    if(is_backward_for_loglayer==true){
       log_backward_result=log_layer.backward(p_y_given_x_softmax=layer_inputs(n_layers+1), 
                                              x=layer_inputs(n_layers),
                                              y=y)
@@ -290,7 +300,6 @@ class RNN(_n_in:Int,
       layers_train_b_add_tmp += log_backward_result._2
       train_cross_entropy_result=log_backward_result._4
     }
-    
     /*
      * step2 backward hidden_layers
      */  
@@ -308,9 +317,9 @@ class RNN(_n_in:Int,
                                       is_last_time=is_last_time, 
                                       next_time_w=if(is_last_time) null else hidden_layers(i).W_hh,
                                       next_time_dv=if(is_last_time) null else next_time_dv(i),
-                                      is_last_layer=false, 
-                                      next_layer_w=log_layer.W, 
-                                      next_layer_dv=log_backward_result._3, 
+                                      is_last_layer=false,                     //后面还有log_layer层结构
+                                      next_layer_w=log_layer.W,                //使用log_layer的w
+                                      next_layer_dv=log_backward_result._3,    //使用log_layer的d_v
                                       dropout=dropout, 
                                       mask=if(dropout) dropout_masks(i) else Array())   
           }else{
@@ -322,9 +331,9 @@ class RNN(_n_in:Int,
                                       is_last_time=is_last_time, 
                                       next_time_w=if(is_last_time) null else hidden_layers(i).W_hh,
                                       next_time_dv=if(is_last_time) null else next_time_dv(i),
-                                      is_last_layer=true, 
-                                      next_layer_w=null, 
-                                      next_layer_dv=null, 
+                                      is_last_layer=true,                      //后面没有log_layer层结构了(由于i == n_layers-1所以更没有hidden了)
+                                      next_layer_w=null,                       //无null
+                                      next_layer_dv=null,                      //无null
                                       dropout=dropout, 
                                       mask=if(dropout) dropout_masks(i) else Array())            
           }                                                      
@@ -337,9 +346,9 @@ class RNN(_n_in:Int,
                                     is_last_time=is_last_time, 
                                     next_time_w=if(is_last_time) null else hidden_layers(i).W_hh,
                                     next_time_dv=if(is_last_time) null else next_time_dv(i),
-                                    is_last_layer=false, 
-                                    next_layer_w=hidden_layers(i+1).W, 
-                                    next_layer_dv=hidden_layers_i_train_d_v, 
+                                    is_last_layer=false,                       //后面有hidden(由于i < n_layers-1)
+                                    next_layer_w=hidden_layers(i+1).W,         //使用下一层hidden_layers(i+1)的w
+                                    next_layer_dv=hidden_layers_i_train_d_v,   //使用下一层hidden_layers(i+1)的d_v
                                     dropout=dropout, 
                                     mask=if(dropout) dropout_masks(i) else Array())        
         }
@@ -347,15 +356,386 @@ class RNN(_n_in:Int,
         layers_train_b_add_tmp +=hidden_layers_i_train._2
         layers_train_W_hh_add_tmp +=hidden_layers_i_train._3
         layers_train_b_hh_add_tmp +=hidden_layers_i_train._4
-        hidden_layers_i_train_d_v=hidden_layers_i_train._5      
+        hidden_layers_i_train_d_v=hidden_layers_i_train._5    
+        layers_train_dv+=hidden_layers_i_train_d_v
     }
-    (layers_train_W_add_tmp.reverse.toArray,layers_train_b_add_tmp.reverse.toArray,layers_train_W_hh_add_tmp.reverse.toArray,layers_train_b_hh_add_tmp.reverse.toArray)
+    (layers_train_W_add_tmp.reverse.toArray,layers_train_b_add_tmp.reverse.toArray,layers_train_W_hh_add_tmp.reverse.toArray,layers_train_b_hh_add_tmp.reverse.toArray,layers_train_dv.reverse.toArray,train_cross_entropy_result)
   }
   
+  
+  
+  /**************** 
+   * MLP的向前传播 
+   * 一个序列的所有时间状态下,经过mlp的向前传播
+   * 输入
+   *   x_list 一个样本的输入x  但是此时是一个序列
+   *   dropout 是否使用dropout
+   *   p_dropout dropout的比例
+   *     
+   * 输出
+   *   forward_times_result 由0->(win_times-1)时间状态下的每一个正向传播的输出
+   */
+  def forward(x_list:Array[Array[Double]],
+              dropout:Boolean=true, 
+              p_dropout:Double=0.3):Array[(Array[Array[Double]],Array[Array[Double]],Array[Array[Double]])]={
+    /*
+     * 初始化输出数据
+     * */
+    val forward_times_result:ArrayBuffer[(Array[Array[Double]],Array[Array[Double]],Array[Array[Double]])]=ArrayBuffer()
+    /* 
+     * 遍历每一个时间状态0 --> win_times-1
+     */
+    for(t_i <-0 until win_times){
+      if(t_i==0){
+        //第一个时间状态t0
+        forward_times_result +=forward_one_time(x=x_list(t_i),
+                                                is_first_time=true,
+                                                pre_time_layers_output=null,
+                                                is_forward_for_loglayer=(if(RNN_structure=="full") true else false),
+                                                dropout=dropout, 
+                                                p_dropout=p_dropout)         
+      }else if(t_i==(win_times-1)){
+        //最后一个时间状态(win_times-1)
+        forward_times_result +=forward_one_time(x=x_list(t_i),
+                                                is_first_time=false,
+                                                pre_time_layers_output=forward_times_result(t_i-1)._1.slice(from=1,until=(n_layers+1)),//使用上一个时间状态正向传播的结果layer_inputs的1->n_layers中hidden的输出
+                                                is_forward_for_loglayer=true,//最后一个时间状态一定有log输出
+                                                dropout=dropout, 
+                                                p_dropout=p_dropout)          
+      }else{
+        //中间的时间状态
+        forward_times_result +=forward_one_time(x=x_list(t_i),
+                                                is_first_time=false,
+                                                pre_time_layers_output=forward_times_result(t_i-1)._1.slice(from=1,until=(n_layers+1)),//使用上一个时间状态正向传播的结果layer_inputs的1->n_layers中hidden的输出
+                                                is_forward_for_loglayer=(if(RNN_structure=="full") true else false),
+                                                dropout=dropout, 
+                                                p_dropout=p_dropout)         
+      }
+    }  
+    forward_times_result.toArray
+  }
 
+  
+  /**************** 
+   * MLP的向后传播 
+   * 一个序列的所有时间状态下,经过mlp的向后传播
+   * 输入
+   *   y_list 一个样本的输入y  但是此时是一个序列
+   *                 如果RNN_structure=='full'即每次时间状态都有一个y对应        则y=多个Array[Int]的序列
+   *                 如果RNN_structure=='one'即仅在最后一个时间状态才有y对应   则y=1个Array[Int]的序列
+   *   dropout 是否使用dropout
+   *     
+   * 输出
+   *   backward_times_result 由0->(win_times-1)时间状态下的每一个向后传播的输出
+   */
+  def backward(y_list:Array[Array[Int]],
+               forward_times_result:Array[(Array[Array[Double]],Array[Array[Double]],Array[Array[Double]])],
+               dropout:Boolean=true):Array[(Array[Array[Array[Double]]],Array[Array[Double]],Array[Array[Array[Double]]],Array[Array[Double]],Array[Array[Double]],Double)]={
+    /*
+     * 初始化输出数据
+     * */
+    val backward_times_result:ArrayBuffer[(Array[Array[Array[Double]]],Array[Array[Double]],Array[Array[Array[Double]]],Array[Array[Double]],Array[Array[Double]],Double)]=ArrayBuffer()
+    /* 
+     * 遍历每一个时间状态 win_times-1  --> 0
+     */
+    var count_i:Int=0
+    for(t_i <-(0 until win_times).reverse){
+      if(t_i==(win_times-1)){
+        //最后一个时间状态(win_times-1)
+        backward_times_result+=backward_one_time(y=(if(RNN_structure=="full") y_list(t_i) else y_list(0)),
+                                                 layer_inputs=forward_times_result(t_i)._1,
+                                                 layer_doutputs=forward_times_result(t_i)._2,
+                                                 dropout_masks=forward_times_result(t_i)._3,
+                                                 is_first_time=false,
+                                                 pre_time_layers_output=forward_times_result(t_i-1)._1.slice(from=1,until=(n_layers+1)),
+                                                 is_last_time=true,
+                                                 next_time_dv=null,
+                                                 is_backward_for_loglayer=true,
+                                                 dropout=dropout)
+      }else if(t_i==0){
+        //第一个时间状态t0
+        backward_times_result+=backward_one_time(y=(if(RNN_structure=="full") y_list(t_i) else null),
+                                                 layer_inputs=forward_times_result(t_i)._1,
+                                                 layer_doutputs=forward_times_result(t_i)._2,
+                                                 dropout_masks=forward_times_result(t_i)._3,
+                                                 is_first_time=true,
+                                                 pre_time_layers_output=null,
+                                                 is_last_time=false,
+                                                 next_time_dv=backward_times_result(count_i-1)._5,
+                                                 is_backward_for_loglayer=(if(RNN_structure=="full") true else false),
+                                                 dropout=dropout)  
+      }else{
+        //中间的时间状态
+        backward_times_result+=backward_one_time(y=(if(RNN_structure=="full") y_list(t_i) else null),
+                                                 layer_inputs=forward_times_result(t_i)._1,
+                                                 layer_doutputs=forward_times_result(t_i)._2,
+                                                 dropout_masks=forward_times_result(t_i)._3,
+                                                 is_first_time=false,
+                                                 pre_time_layers_output=forward_times_result(t_i-1)._1.slice(from=1,until=(n_layers+1)),
+                                                 is_last_time=false,
+                                                 next_time_dv=backward_times_result(count_i-1)._5,
+                                                 is_backward_for_loglayer=(if(RNN_structure=="full") true else false),
+                                                 dropout=dropout) 
+      }
+      count_i+=1
+    }
+    backward_times_result.reverse.toArray
+  }  
+  
+  
+  /*
+   * 使用Array[一串序列输入x] 来训练
+   * */
+  def train_batch(x_list_batch:Array[Array[Array[Double]]],
+                  y_list_batch:Array[Array[Array[Int]]],
+                  lr: Double,
+                  batch_num_per:Double=1.0,
+                  dropout:Boolean=true,
+                  p_dropout:Double=0.3){
+    /*
+     * 抽样数据
+     * */
+    //抽取样本个数
+    val batch_num:Int=if(batch_num_per==1.0){
+      x_list_batch.length
+    }else{
+      round((x_list_batch.length*batch_num_per).toFloat)//每次批量训练样本数
+    }
+    val rng_epooch:Random=new Random()//每次生成一个种子
+    val rng_index:ArrayBuffer[Int]=ArrayBuffer();
+    if(batch_num_per==1.0){
+      for(i <- 0 to (batch_num-1)) rng_index += i//抽样样本的角标 
+    }else{
+      for(i <- 0 to (batch_num-1)) rng_index += round((rng_epooch.nextDouble()*(x_list_batch.length-1)).toFloat)//抽样样本的角标        
+    }  
+    /* 
+     * 初始化参数增量 layers_train_W_add layers_train_b_add  layers_train_W_hh_add  layers_train_b_hh_add
+     * */
+    val layers_train_W_add:ArrayBuffer[Array[Array[Double]]]=ArrayBuffer()//每一层的参数增量w_add
+    val layers_train_b_add:ArrayBuffer[Array[Double]]=ArrayBuffer()//每一层的参数增量b_add 
+    val layers_train_W_hh_add:ArrayBuffer[Array[Array[Double]]]=ArrayBuffer()//每一层的参数增量W_hh_add
+    val layers_train_b_hh_add:ArrayBuffer[Array[Double]]=ArrayBuffer()//每一层的参数增量h_hh_add
+    for(i<- 0 until n_layers){
+      layers_train_W_add += Array.ofDim[Double](hidden_layers(i).n_out, hidden_layers(i).n_in)
+      layers_train_b_add += new Array[Double](hidden_layers(i).n_out)
+      layers_train_W_hh_add += Array.ofDim[Double](hidden_layers(i).n_out, hidden_layers(i).n_out)
+      layers_train_b_hh_add += new Array[Double](hidden_layers(i).n_out)      
+    }
+    layers_train_W_add += Array.ofDim[Double](log_layer.n_out,log_layer.n_in)
+    layers_train_b_add += new Array[Double](log_layer.n_out)   
+    /* 
+     * 批量训练
+     * */    
+    var cross_entropy:Double=0.0
+    for(i <- rng_index) {
+      //一个样本(序列)向前传播
+      val forward_times_result=forward(x_list=x_list_batch(i),
+                                       dropout=dropout, 
+                                       p_dropout=p_dropout)
+      //一个样本(序列)向后传播
+      val backward_times_result=backward(y_list=y_list_batch(i),
+                                         forward_times_result=forward_times_result,
+                                         dropout=dropout)
+      /* 
+       * 更新w和b
+       */
+      //hidden_layers
+      for(layer_i<- 0 until n_layers){
+        for(t_i<-0 until win_times ){
+          for(i<- 0 until hidden_layers(layer_i).n_out){
+            for(j<- 0 until hidden_layers(layer_i).n_in){
+              layers_train_W_add(layer_i)(i)(j) +=  backward_times_result(t_i)._1(layer_i)(i)(j)
+            } 
+            layers_train_b_add(layer_i)(i) +=  backward_times_result(t_i)._2(layer_i)(i)
+            for(j<- 0 until hidden_layers(layer_i).n_out){
+              layers_train_W_hh_add(layer_i)(i)(j) +=  backward_times_result(t_i)._3(layer_i)(i)(j)
+            } 
+            layers_train_b_hh_add(layer_i)(i) +=  backward_times_result(t_i)._4(layer_i)(i)
+          }
+        }
+      }
+      //log_layer
+      if(RNN_structure=="full"){
+        for(t_i<-0 until win_times ){
+          for(i<- 0 until log_layer.n_out){
+            for(j<- 0 until log_layer.n_in){
+              layers_train_W_add(n_layers)(i)(j) += backward_times_result(t_i)._1(n_layers)(i)(j)  
+            }
+            layers_train_b_add(n_layers)(i) +=  backward_times_result(t_i)._2(n_layers)(i)
+          }
+        }
+      }else{
+        for(i<- 0 until log_layer.n_out){
+          for(j<- 0 until log_layer.n_in){
+            layers_train_W_add(n_layers)(i)(j) = backward_times_result(win_times-1)._1(n_layers)(i)(j)  
+          }
+          layers_train_b_add(n_layers)(i) =  backward_times_result(win_times-1)._2(n_layers)(i)
+        }
+      }
+      //更新w和b
+      for(layer_i<- 0 until n_layers){
+        for(i<- 0 until hidden_layers(layer_i).n_out){
+          for(j<- 0 until hidden_layers(layer_i).n_in){
+            hidden_layers(layer_i).W(i)(j) +=lr*layers_train_W_add(layer_i)(i)(j)/batch_num
+          }
+          hidden_layers(layer_i).b(i) +=lr*layers_train_b_add(layer_i)(i)/batch_num
+          for(j<- 0 until hidden_layers(layer_i).n_out){
+            hidden_layers(layer_i).W_hh(i)(j) +=lr*layers_train_W_hh_add(layer_i)(i)(j)/batch_num
+          }
+          hidden_layers(layer_i).b_hh(i) +=lr*layers_train_b_hh_add(layer_i)(i)/batch_num          
+        }
+      }
+      for(i<- 0 until log_layer.n_out){
+        for(j<- 0 until log_layer.n_in){
+          log_layer.W(i)(j) +=lr*layers_train_W_add(n_layers)(i)(j)/batch_num    
+        }
+        log_layer.b(i) +=lr*layers_train_b_add(n_layers)(i)/batch_num 
+      }
+      cross_entropy += backward_times_result(win_times-1)._6
+    }
+    print(cross_entropy/batch_num+"\n")
+  }
+  
   
 }
 
 object RNN {
-  
+  def test_fold_for_full(){
+    //refer to http://deeplearning.net/tutorial/rnnslu.html
+    
+    //load fold dataset
+    val (lexs,nes,labels,code2words,code2labels)=dp_utils.dataset.load_fold("D:/youku_work/python/spark_python_scala/scala/workpace/deeplearning/dataset/fold/fold_code.txt",
+                        "D:/youku_work/python/spark_python_scala/scala/workpace/deeplearning/dataset/fold/fold_dict_words.txt",
+                        "D:/youku_work/python/spark_python_scala/scala/workpace/deeplearning/dataset/fold/fold_dict_labels.txt")
+    
+    /* 
+     * nv :: size of our vocabulary
+       de :: dimension of the embedding space
+       cs :: context window size
+     * 
+     */
+    val nv=code2words.toList.length
+    val de=50
+    val cs =7//or 5 
+    val labels_num=code2labels.toList.length
+    
+    //转化x
+    //contextwin(Array(0, 1, 2, 3, 4),3).foreach(x=>{x.foreach(x=>print(x+"\t"));print("\n")})
+    //contextwin(Array(0, 1, 2, 3, 4),7).foreach(x=>{x.foreach(x=>print(x+"\t"));print("\n")})    
+    def contextwin(x_list_in:Array[Int],win_in:Int):Array[Array[Int]]={
+      val result:Array[Array[Int]]=Array.ofDim[Int](x_list_in.length,win_in)
+      val log_x_list:Array[Int]=new Array(x_list_in.length+(win_in-1))
+      for(i<-0 until log_x_list.length){
+        if(i<(win_in-1)/2 || i>= (win_in-1)/2+x_list_in.length)
+          log_x_list(i)= -1
+        else
+          log_x_list(i)=x_list_in(i- (win_in-1)/2)
+      }
+      //log_x_list.foreach(x=>print(x+"\t"));print("\n")
+      for(i<-0 until x_list_in.length){
+        result(i)=log_x_list.slice(from=i, until=i+win_in)
+      }
+      result
+    }
+    
+    /*定义uniform均值分布的随机数产生函数
+   * max 均匀分布的max
+   * min 均匀分布的min
+   * gen_nums  随机数生成个数
+   * rng 随机种子
+   * */
+    def random_uniform(min: Double, max: Double,gen_nums:Int,rng:Random=new Random(1234)): Array[Double] ={
+      val result:Array[Double]=new Array(gen_nums);
+      for(i <- 0 until gen_nums){
+        result(i)=rng.nextDouble()*(max - min) + min
+      }
+      result
+    }
+    
+    /*
+     * Word embeddings
+     * */
+    val embeddings_0 = random_uniform(-1,1,(nv+1)*de)
+    val embeddings:Array[Array[Double]]=Array.ofDim[Double](nv+1,de)
+    for(i <-0 until nv+1){
+      for(j <-0 until de){  
+        embeddings(i)(j)=embeddings_0(i*de+j)
+      }
+    }
+    def trans_word_to_embeddings(in_word_idx:Int):Array[Double]={
+      if(in_word_idx== -1){
+        embeddings(0)
+      }else{
+        embeddings(in_word_idx+1)  
+      }
+    }
+    
+    /*
+     * 十进制转化为二进制
+     * trans_10_to_2(12,8).foreach(x=>print(x+"\t"))
+     * */
+    def trans_10_to_2(in_10:Int,out_sizes:Int):Array[Int]={
+      val result:Array[Int]=new Array(out_sizes)
+      val tmp=Integer.toBinaryString(in_10)
+      //print(tmp+"\n")
+      for(i<-0 until tmp.length()){
+        result(out_sizes-i-1)=tmp(tmp.length()-i-1).toInt-48
+      }
+      result
+    }
+    
+    /*
+     * 转化数据集
+     * */
+    val dataset_X:ArrayBuffer[Array[Array[Double]]]=ArrayBuffer()
+    val dataset_Y:ArrayBuffer[Array[Array[Int]]]=ArrayBuffer()
+    for(i<-0 until lexs.length){
+      val tmp=contextwin(lexs(i),cs)
+      for(j<-0 until tmp.length){
+        var tmp_X:ArrayBuffer[Array[Double]]=ArrayBuffer()
+        for(k<-0 until tmp(j).length){
+          tmp_X+=trans_word_to_embeddings(tmp(j)(k))  
+        } 
+        dataset_X+=tmp_X.toArray
+        dataset_Y+=Array(trans_10_to_2(labels(i)(j),10))//max is 127
+      }
+    }
+    /*dataset_X(10).foreach(x=>print(x+"\t"));print("\n")
+    print(dataset_X(10).length+"\n")
+    dataset_Y(10).foreach(x=>print(x+"\t"));print("\n")
+    print(dataset_Y(10).length+"\n")
+    print(dataset_X.length)*/
+    
+    
+    /*
+     * 测试集 训练集的分割
+     */
+    val dataset_nums:Int=dataset_X.length
+    val dataset_train_nums:Int=round(dataset_nums*0.65).toInt
+    val dataset_test_nums:Int=round(dataset_nums*0.3).toInt
+    //print(dataset_nums+"\t"+dataset_train_nums+"\t"+dataset_test_nums)  
+    val train_X=dataset_X.slice(from=0, until=dataset_train_nums).toArray
+    val train_Y=dataset_Y.slice(from=0, until=dataset_train_nums).toArray
+    val test_X=dataset_X.slice(from=dataset_train_nums, until=dataset_train_nums+dataset_test_nums).toArray
+    val test_Y=dataset_Y.slice(from=dataset_train_nums, until=dataset_train_nums+dataset_test_nums).toArray
+    
+    
+    /*
+     * trains
+     * */
+    val RNN_obj=new RNN(_n_in=de, 
+          _hidden_layer_sizes=Array(100,100,100), 
+          _n_out=10,
+          _win_times=cs,
+          _RNN_structure="one")
+    for(i<-0 until 50){
+      print("训练第"+i+"次:")
+      RNN_obj.train_batch(x_list_batch=train_X, y_list_batch=train_Y, lr=0.01, batch_num_per=0.01, dropout=false)  
+    }
+    
+    
+  }
+  def main(args: Array[String]) {
+    test_fold_for_full()
+  }  
 }
