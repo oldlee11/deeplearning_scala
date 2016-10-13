@@ -182,7 +182,8 @@ class RNN(_n_in:Int,
                        pre_time_layers_output:Array[Array[Double]]=null,
                        is_forward_for_loglayer:Boolean,
                        dropout:Boolean=true, 
-                       p_dropout:Double=0.3):(Array[Array[Double]],Array[Array[Double]],Array[Array[Double]])={
+                       p_dropout:Double=0.3,
+                       debug:Boolean=false):(Array[Array[Double]],Array[Array[Double]],Array[Array[Double]])={
     /*
      * step1 forward hidden_layers
      */
@@ -196,6 +197,8 @@ class RNN(_n_in:Int,
       if(i==0) {
         layer_input=x 
       }
+      if(debug) print("layer_input=");layer_input.map(x=>print(x+"\t"));print("\n")
+      if(debug) print("hidden "+i+"\n")
       layer_inputs +=layer_input
       //对第i层hidden_layers做向前传播
       hidden_forward_result=hidden_layers(i).forward(input=layer_input,
@@ -217,11 +220,14 @@ class RNN(_n_in:Int,
       }
     }
     layer_inputs +=layer_input
+    if(debug) print("layer_input=");layer_input.map(x=>print(x+"\t"));print("\n")
     /*
      * step2 forward log_layer
      */  
     if(is_forward_for_loglayer==true){
+      if(debug) print("log_layer \n")
       layer_inputs+=log_layer.forward(x=layer_input)
+      if(debug) print("layer_input=");layer_inputs(hidden_layers.length+1).map(x=>print(x+"\t"));print("\n")
     }
     /*
      * 输出
@@ -278,7 +284,8 @@ class RNN(_n_in:Int,
                         is_last_time:Boolean,
                         next_time_dv:Array[Array[Double]],
                         is_backward_for_loglayer:Boolean,
-                        dropout:Boolean=true):(Array[Array[Array[Double]]],Array[Array[Double]],Array[Array[Array[Double]]],Array[Array[Double]],Array[Array[Double]],Double)={
+                        dropout:Boolean=true,
+                        debug:Boolean=false):(Array[Array[Array[Double]]],Array[Array[Double]],Array[Array[Array[Double]]],Array[Array[Double]],Array[Array[Double]],Double)={
     /*
      * 初始化输出数据
      * */
@@ -293,18 +300,21 @@ class RNN(_n_in:Int,
     var log_backward_result:(Array[Array[Double]],Array[Double],Array[Double],Double)=null
     var train_cross_entropy_result:Double=0.0
     if(is_backward_for_loglayer==true){
+      if(debug) print("log layer \n") 
       log_backward_result=log_layer.backward(p_y_given_x_softmax=layer_inputs(n_layers+1), 
                                              x=layer_inputs(n_layers),
                                              y=y)
       layers_train_W_add_tmp += log_backward_result._1
       layers_train_b_add_tmp += log_backward_result._2
-      train_cross_entropy_result=log_backward_result._4
+      train_cross_entropy_result=log_backward_result._4     
+      if(debug) print("dv=");log_backward_result._3.map(x=>print(x+"\t"));print("\n")
     }
     /*
      * step2 backward hidden_layers
      */  
     var hidden_layers_i_train_d_v:Array[Double]=Array() 
     for(i <-(0 until n_layers).reverse){
+      if(debug) print("hidden "+i+"\n")
       val hidden_layers_i_train=
         if (i == n_layers-1){
           //下一层hidden_layers(i+1)是LogisticRegression
@@ -358,6 +368,7 @@ class RNN(_n_in:Int,
         layers_train_b_hh_add_tmp +=hidden_layers_i_train._4
         hidden_layers_i_train_d_v=hidden_layers_i_train._5    
         layers_train_dv+=hidden_layers_i_train_d_v
+        if(debug) print("dv=");hidden_layers_i_train_d_v.map(x=>print(x+"\t"));print("\n")
     }
     (layers_train_W_add_tmp.reverse.toArray,layers_train_b_add_tmp.reverse.toArray,layers_train_W_hh_add_tmp.reverse.toArray,layers_train_b_hh_add_tmp.reverse.toArray,layers_train_dv.reverse.toArray,train_cross_entropy_result)
   }
@@ -377,7 +388,7 @@ class RNN(_n_in:Int,
    */
   def forward(x_list:Array[Array[Double]],
               dropout:Boolean=true, 
-              p_dropout:Double=0.3):Array[(Array[Array[Double]],Array[Array[Double]],Array[Array[Double]])]={
+              p_dropout:Double=0.3,debug:Boolean=false):Array[(Array[Array[Double]],Array[Array[Double]],Array[Array[Double]])]={
     /*
      * 初始化输出数据
      * */
@@ -386,6 +397,7 @@ class RNN(_n_in:Int,
      * 遍历每一个时间状态0 --> win_times-1
      */
     for(t_i <-0 until win_times){
+      if(debug) print("time "+t_i+"\n")
       if(t_i==0){
         //第一个时间状态t0
         forward_times_result +=forward_one_time(x=x_list(t_i),
@@ -393,7 +405,7 @@ class RNN(_n_in:Int,
                                                 pre_time_layers_output=null,
                                                 is_forward_for_loglayer=(if(RNN_structure=="full") true else false),
                                                 dropout=dropout, 
-                                                p_dropout=p_dropout)         
+                                                p_dropout=p_dropout,debug=debug)         
       }else if(t_i==(win_times-1)){
         //最后一个时间状态(win_times-1)
         forward_times_result +=forward_one_time(x=x_list(t_i),
@@ -401,7 +413,7 @@ class RNN(_n_in:Int,
                                                 pre_time_layers_output=forward_times_result(t_i-1)._1.slice(from=1,until=(n_layers+1)),//使用上一个时间状态正向传播的结果layer_inputs的1->n_layers中hidden的输出
                                                 is_forward_for_loglayer=true,//最后一个时间状态一定有log输出
                                                 dropout=dropout, 
-                                                p_dropout=p_dropout)          
+                                                p_dropout=p_dropout,debug=debug)          
       }else{
         //中间的时间状态
         forward_times_result +=forward_one_time(x=x_list(t_i),
@@ -409,7 +421,7 @@ class RNN(_n_in:Int,
                                                 pre_time_layers_output=forward_times_result(t_i-1)._1.slice(from=1,until=(n_layers+1)),//使用上一个时间状态正向传播的结果layer_inputs的1->n_layers中hidden的输出
                                                 is_forward_for_loglayer=(if(RNN_structure=="full") true else false),
                                                 dropout=dropout, 
-                                                p_dropout=p_dropout)         
+                                                p_dropout=p_dropout,debug=debug)         
       }
     }  
     forward_times_result.toArray
@@ -430,7 +442,7 @@ class RNN(_n_in:Int,
    */
   def backward(y_list:Array[Array[Int]],
                forward_times_result:Array[(Array[Array[Double]],Array[Array[Double]],Array[Array[Double]])],
-               dropout:Boolean=true):Array[(Array[Array[Array[Double]]],Array[Array[Double]],Array[Array[Array[Double]]],Array[Array[Double]],Array[Array[Double]],Double)]={
+               dropout:Boolean=true,debug:Boolean=false):Array[(Array[Array[Array[Double]]],Array[Array[Double]],Array[Array[Array[Double]]],Array[Array[Double]],Array[Array[Double]],Double)]={
     /*
      * 初始化输出数据
      * */
@@ -440,6 +452,7 @@ class RNN(_n_in:Int,
      */
     var count_i:Int=0
     for(t_i <-(0 until win_times).reverse){
+      if(debug) print("time "+t_i+"\n")
       if(t_i==(win_times-1)){
         //最后一个时间状态(win_times-1)
         backward_times_result+=backward_one_time(y=(if(RNN_structure=="full") y_list(t_i) else y_list(0)),
@@ -451,7 +464,7 @@ class RNN(_n_in:Int,
                                                  is_last_time=true,
                                                  next_time_dv=null,
                                                  is_backward_for_loglayer=true,
-                                                 dropout=dropout)
+                                                 dropout=dropout,debug=debug)
       }else if(t_i==0){
         //第一个时间状态t0
         backward_times_result+=backward_one_time(y=(if(RNN_structure=="full") y_list(t_i) else null),
@@ -463,7 +476,7 @@ class RNN(_n_in:Int,
                                                  is_last_time=false,
                                                  next_time_dv=backward_times_result(count_i-1)._5,
                                                  is_backward_for_loglayer=(if(RNN_structure=="full") true else false),
-                                                 dropout=dropout)  
+                                                 dropout=dropout,debug=debug)  
       }else{
         //中间的时间状态
         backward_times_result+=backward_one_time(y=(if(RNN_structure=="full") y_list(t_i) else null),
@@ -475,7 +488,7 @@ class RNN(_n_in:Int,
                                                  is_last_time=false,
                                                  next_time_dv=backward_times_result(count_i-1)._5,
                                                  is_backward_for_loglayer=(if(RNN_structure=="full") true else false),
-                                                 dropout=dropout) 
+                                                 dropout=dropout,debug=debug) 
       }
       count_i+=1
     }
@@ -491,7 +504,8 @@ class RNN(_n_in:Int,
                   lr: Double,
                   batch_num_per:Double=1.0,
                   dropout:Boolean=true,
-                  p_dropout:Double=0.3){
+                  p_dropout:Double=0.3,
+                  debug:Boolean=false){
     /*
      * 抽样数据
      * */
@@ -525,82 +539,207 @@ class RNN(_n_in:Int,
     layers_train_b_add += new Array[Double](log_layer.n_out)   
     /* 
      * 批量训练
-     * */    
+     * */      
     var cross_entropy:Double=0.0
     for(i <- rng_index) {
+      if(debug) print("样本"+i+"\n")
       //一个样本(序列)向前传播
+      if(debug) print("forward:"+"\n")
       val forward_times_result=forward(x_list=x_list_batch(i),
                                        dropout=dropout, 
-                                       p_dropout=p_dropout)
+                                       p_dropout=p_dropout,
+                                       debug=debug)
       //一个样本(序列)向后传播
+      if(debug) print("backward:"+"\n")
       val backward_times_result=backward(y_list=y_list_batch(i),
                                          forward_times_result=forward_times_result,
-                                         dropout=dropout)
+                                         dropout=dropout,
+                                         debug=debug)
       /* 
-       * 更新w和b
+       * 更新w_add和b_add w_hh_add b_hh_add
        */
       //hidden_layers
       for(layer_i<- 0 until n_layers){
         for(t_i<-0 until win_times ){
           for(i<- 0 until hidden_layers(layer_i).n_out){
             for(j<- 0 until hidden_layers(layer_i).n_in){
-              layers_train_W_add(layer_i)(i)(j) +=  backward_times_result(t_i)._1(layer_i)(i)(j)
+              layers_train_W_add(layer_i)(i)(j) +=  backward_times_result(t_i)._1(layer_i)(i)(j)/win_times
             } 
-            layers_train_b_add(layer_i)(i) +=  backward_times_result(t_i)._2(layer_i)(i)
+            layers_train_b_add(layer_i)(i) +=  backward_times_result(t_i)._2(layer_i)(i)/win_times
             for(j<- 0 until hidden_layers(layer_i).n_out){
-              layers_train_W_hh_add(layer_i)(i)(j) +=  backward_times_result(t_i)._3(layer_i)(i)(j)
+              layers_train_W_hh_add(layer_i)(i)(j) +=  backward_times_result(t_i)._3(layer_i)(i)(j)/win_times
             } 
-            layers_train_b_hh_add(layer_i)(i) +=  backward_times_result(t_i)._4(layer_i)(i)
+            layers_train_b_hh_add(layer_i)(i) +=  backward_times_result(t_i)._4(layer_i)(i)/win_times
           }
+        }
+      }
+      if(debug){
+        print("一次样本训练后,各w的变化_add:\n")
+        for(layer_i<- 0 until n_layers){
+          print("hidden_"+layer_i+"的w\n")
+          for(i<- 0 until hidden_layers(layer_i).n_out){
+            print(hidden_layers(layer_i).W(i).mkString(sep="\t"));print("\n")
+          }
+          print("hidden_"+layer_i+"的w_hh\n")
+          for(i<- 0 until hidden_layers(layer_i).n_out){
+            print(hidden_layers(layer_i).W_hh(i).mkString(sep="\t"));print("\n")
+          }          
         }
       }
       //log_layer
       if(RNN_structure=="full"){
+        //full则每个时间都有log输出层
         for(t_i<-0 until win_times ){
           for(i<- 0 until log_layer.n_out){
             for(j<- 0 until log_layer.n_in){
-              layers_train_W_add(n_layers)(i)(j) += backward_times_result(t_i)._1(n_layers)(i)(j)  
+              layers_train_W_add(n_layers)(i)(j) += backward_times_result(t_i)._1(n_layers)(i)(j)/win_times  
             }
-            layers_train_b_add(n_layers)(i) +=  backward_times_result(t_i)._2(n_layers)(i)
+            layers_train_b_add(n_layers)(i) +=  backward_times_result(t_i)._2(n_layers)(i)/win_times
           }
         }
       }else{
+        //one 则仅仅在最后一层win_times-1  有 log
         for(i<- 0 until log_layer.n_out){
           for(j<- 0 until log_layer.n_in){
-            layers_train_W_add(n_layers)(i)(j) = backward_times_result(win_times-1)._1(n_layers)(i)(j)  
+            layers_train_W_add(n_layers)(i)(j) = backward_times_result(win_times-1)._1(n_layers)(i)(j)/1  
           }
-          layers_train_b_add(n_layers)(i) =  backward_times_result(win_times-1)._2(n_layers)(i)
-        }
+          layers_train_b_add(n_layers)(i) =  backward_times_result(win_times-1)._2(n_layers)(i)/1
+        }       
       }
-      //更新w和b
-      for(layer_i<- 0 until n_layers){
-        for(i<- 0 until hidden_layers(layer_i).n_out){
-          for(j<- 0 until hidden_layers(layer_i).n_in){
-            hidden_layers(layer_i).W(i)(j) +=lr*layers_train_W_add(layer_i)(i)(j)/batch_num
-          }
-          hidden_layers(layer_i).b(i) +=lr*layers_train_b_add(layer_i)(i)/batch_num
-          for(j<- 0 until hidden_layers(layer_i).n_out){
-            hidden_layers(layer_i).W_hh(i)(j) +=lr*layers_train_W_hh_add(layer_i)(i)(j)/batch_num
-          }
-          hidden_layers(layer_i).b_hh(i) +=lr*layers_train_b_hh_add(layer_i)(i)/batch_num          
+      if(debug){
+        print("log_layer的w\n")
+        for(i<- 0 until log_layer.n_out){
+          print(log_layer.W(i).mkString(sep="\t"));print("\n")
         }
-      }
-      for(i<- 0 until log_layer.n_out){
-        for(j<- 0 until log_layer.n_in){
-          log_layer.W(i)(j) +=lr*layers_train_W_add(n_layers)(i)(j)/batch_num    
-        }
-        log_layer.b(i) +=lr*layers_train_b_add(n_layers)(i)/batch_num 
-      }
+      }       
       cross_entropy += backward_times_result(win_times-1)._6
+      if(debug){
+        print(backward_times_result(win_times-1)._6+"\n")
+      }
     }
+    /*
+     * 更新w和b
+     */
+    for(layer_i<- 0 until n_layers){
+      for(i<- 0 until hidden_layers(layer_i).n_out){
+        for(j<- 0 until hidden_layers(layer_i).n_in){
+          hidden_layers(layer_i).W(i)(j) +=lr*layers_train_W_add(layer_i)(i)(j)/batch_num
+        }
+        hidden_layers(layer_i).b(i) +=lr*layers_train_b_add(layer_i)(i)/batch_num
+        for(j<- 0 until hidden_layers(layer_i).n_out){
+          hidden_layers(layer_i).W_hh(i)(j) +=lr*layers_train_W_hh_add(layer_i)(i)(j)/batch_num
+        }
+        hidden_layers(layer_i).b_hh(i) +=lr*layers_train_b_hh_add(layer_i)(i)/batch_num          
+      }
+    }
+    for(i<- 0 until log_layer.n_out){
+      for(j<- 0 until log_layer.n_in){
+        log_layer.W(i)(j) +=lr*layers_train_W_add(n_layers)(i)(j)/batch_num    
+      }
+      log_layer.b(i) +=lr*layers_train_b_add(n_layers)(i)/batch_num 
+    }    
     print(cross_entropy/batch_num+"\n")
   }
-  
-  
 }
 
 object RNN {
-  def test_fold_for_full(){
+  def test_sample_for_one(){
+    /*
+     * 十进制转化为0000100000类似的编码
+     * trans_y_to_bit(1,8).foreach(x=>print(x+"\t"))    00000010  (8个bit输出,并且第1为=1)
+     * trans_y_to_bit(0,8).foreach(x=>print(x+"\t"))    00000001  (8个bit输出,并且第0为=1)
+     * */
+    def trans_y_to_bit(pred_in:Int,max_size:Int):Array[Int]={
+      val result:Array[Int]=new Array(max_size);
+      result(pred_in)=1
+      result      
+    }
+    /*
+     * 十进制转化为二进制
+     * trans_10_to_2(12,8).foreach(x=>print(x+"\t"))
+     * */
+    def trans_10_to_2(in_10:Int,out_sizes:Int):Array[Int]={
+      val result:Array[Int]=new Array(out_sizes)
+      val tmp=Integer.toBinaryString(in_10)
+      //print(tmp+"\n")
+      for(i<-0 until tmp.length()){
+        result(out_sizes-i-1)=tmp(tmp.length()-i-1).toInt-48
+      }
+      result
+    }    
+    //Array(0.1191,0.7101,0.0012)-->Array(0,1,0)
+    def trans_pred_to_bin(pred_in:Array[Double],max_size:Int):Array[Int]={
+      var max_index:Int=0
+      for(i <-1 until pred_in.length){
+        if(pred_in(i)>pred_in(max_index)){
+          max_index=i
+        }
+      }
+      val result:Array[Int]=new Array(max_size);
+      result(max_index)=1
+      result      
+    }
+    //Array(1,0,0,0,0,0,0,0,0,0)---->0
+    def trans_bin_to_int(bin_in:Array[Int]):Int={
+      var result:Int= -1;
+      for(i <-0 until bin_in.length){
+        if(bin_in(i)==1){
+          result=i
+        }
+      }
+      result
+    } 
+    
+    val train_X:ArrayBuffer[Array[Array[Double]]]=ArrayBuffer()
+    val train_Y:ArrayBuffer[Array[Array[Int]]]=ArrayBuffer()
+    val max_size=5
+    val win_size =3 
+    val nout=3
+    train_X+=Array(8,7,1).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(1,0,0))
+    train_X+=Array(8,7,2).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(1,0,0))
+    train_X+=Array(8,7,3).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(1,0,0))
+    train_X+=Array(8,7,4).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(1,0,0))    
+    train_X+=Array(2,8,7).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(0,1,0))
+    train_X+=Array(1,8,7).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(0,1,0))
+    train_X+=Array(3,8,7).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(0,1,0))
+    train_X+=Array(4,8,7).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(0,1,0))
+    train_X+=Array(7,1,8).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(0,0,1))
+    train_X+=Array(7,2,8).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(0,0,1))
+    train_X+=Array(7,3,8).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(0,0,1))
+    train_X+=Array(7,4,8).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(0,0,1))
+    
+    /*
+     * trains
+     * */
+    val RNN_obj=new RNN(_n_in=max_size, 
+          _hidden_layer_sizes=Array(50,50), 
+          _n_out=nout,
+          _win_times=win_size,
+          _RNN_structure="one",activation="ReLU")
+    var lr:Double=0.1
+    for(i<-0 until 2){
+      print("训练第"+i+"次:")
+      RNN_obj.train_batch(x_list_batch=train_X.toArray, y_list_batch=train_Y.toArray, lr=lr,dropout=false,debug=true)  
+      lr=lr*0.99
+    }
+    
+    /*
+     * test
+     * */
+    val test_X:ArrayBuffer[Array[Array[Double]]]=ArrayBuffer()
+    test_X+=Array(8,7,5).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); //100
+    test_X+=Array(5,8,7).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); //010
+    test_X+=Array(7,5,8).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); //001
+    for(i<-0 until test_X.length){
+      val forward_times_result=RNN_obj.forward(x_list=test_X(i),dropout=false)      
+      val predict=forward_times_result(RNN_obj.win_times-1)._1(RNN_obj.n_layers+1)      
+      print("第"+i+"个样本预测值:\n")
+      print(predict.mkString(sep=","))
+      print("\n") 
+    }  
+  }
+  
+  def test_fold_for_one(){
     //refer to http://deeplearning.net/tutorial/rnnslu.html
     
     //load fold dataset
@@ -610,14 +749,14 @@ object RNN {
     
     /* 
      * nv :: size of our vocabulary
-       de :: dimension of the embedding space
-       cs :: context window size
-     * 
+     * de :: dimension of the embedding space
+     * cs :: context window size
      */
     val nv=code2words.toList.length
-    val de=50
-    val cs =7//or 5 
+    val de=30//或50
+    val cs =7//3 or 5 or 7 
     val labels_num=code2labels.toList.length
+    val nout=128//英文label最多有127个  使用00000100000形式的编码 所以才有127个 我多加1个再
     
     //转化x
     //contextwin(Array(0, 1, 2, 3, 4),3).foreach(x=>{x.foreach(x=>print(x+"\t"));print("\n")})
@@ -669,19 +808,17 @@ object RNN {
         embeddings(in_word_idx+1)  
       }
     }
+    //print(embeddings.foreach(x=>{x.foreach(y=>print(y+"\t"));print("\n")}))
     
     /*
-     * 十进制转化为二进制
-     * trans_10_to_2(12,8).foreach(x=>print(x+"\t"))
+     * 十进制转化为0000100000类似的编码
+     * trans_y_to_bit(1,8).foreach(x=>print(x+"\t"))    00000010  (8个bit输出,并且第1为=1)
+     * trans_y_to_bit(0,8).foreach(x=>print(x+"\t"))    00000001  (8个bit输出,并且第0为=1)
      * */
-    def trans_10_to_2(in_10:Int,out_sizes:Int):Array[Int]={
-      val result:Array[Int]=new Array(out_sizes)
-      val tmp=Integer.toBinaryString(in_10)
-      //print(tmp+"\n")
-      for(i<-0 until tmp.length()){
-        result(out_sizes-i-1)=tmp(tmp.length()-i-1).toInt-48
-      }
-      result
+    def trans_y_to_bit(pred_in:Int,max_size:Int):Array[Int]={
+      val result:Array[Int]=new Array(max_size);
+      result(pred_in)=1
+      result      
     }
     
     /*
@@ -697,7 +834,7 @@ object RNN {
           tmp_X+=trans_word_to_embeddings(tmp(j)(k))  
         } 
         dataset_X+=tmp_X.toArray
-        dataset_Y+=Array(trans_10_to_2(labels(i)(j),10))//max is 127
+        dataset_Y+=Array(trans_y_to_bit(pred_in=labels(i)(j),max_size=nout))//max is 127
       }
     }
     /*dataset_X(10).foreach(x=>print(x+"\t"));print("\n")
@@ -724,18 +861,63 @@ object RNN {
      * trains
      * */
     val RNN_obj=new RNN(_n_in=de, 
-          _hidden_layer_sizes=Array(100,100,100), 
-          _n_out=10,
+          _hidden_layer_sizes=Array(200,200,200), 
+          _n_out=nout,
           _win_times=cs,
-          _RNN_structure="one")
-    for(i<-0 until 50){
+          _RNN_structure="one",activation="ReLU")
+    var lr:Double=0.1
+    for(i<-0 until 100){
       print("训练第"+i+"次:")
-      RNN_obj.train_batch(x_list_batch=train_X, y_list_batch=train_Y, lr=0.01, batch_num_per=0.01, dropout=false)  
+      RNN_obj.train_batch(x_list_batch=train_X, y_list_batch=train_Y, lr=lr, batch_num_per=0.01, dropout=false,debug=false)  
+      lr=lr*0.99
     }
     
+    /*
+     * test
+     * */
+    //Array(0.1191,0.7101,0.0012)-->Array(0,1,0)
+    def trans_pred_to_bin(pred_in:Array[Double],max_size:Int):Array[Int]={
+      var max_index:Int=0
+      for(i <-1 until pred_in.length){
+        if(pred_in(i)>pred_in(max_index)){
+          max_index=i
+        }
+      }
+      val result:Array[Int]=new Array(max_size);
+      result(max_index)=1
+      result      
+    }
+    //Array(1,0,0,0,0,0,0,0,0,0)---->0
+    def trans_bin_to_int(bin_in:Array[Int]):Int={
+      var result:Int= -1;
+      for(i <-0 until bin_in.length){
+        if(bin_in(i)==1){
+          result=i
+        }
+      }
+      result
+    }    
+    var pred_right_nums:Int=0
+    //val test_N=test_X.length
+    val test_N=10000
+    for(i<-0 until test_N){
+      val forward_times_result=RNN_obj.forward(x_list=test_X(i),dropout=false)      
+      val predict=forward_times_result(RNN_obj.win_times-1)._1(RNN_obj.n_layers+1)
+      print("第"+i+"个样本实际值:\n")
+      print(test_Y(i)(0).mkString(sep=","))
+      print("\n")        
+      print("第"+i+"个样本预测值:\n")
+      print(predict.mkString(sep=","))
+      print("\n") 
+      if(trans_bin_to_int(trans_pred_to_bin(predict,nout))==trans_bin_to_int(test_Y(i)(0))){
+        pred_right_nums +=1
+      }
+    }
+    println(pred_right_nums.toDouble/(test_N.toDouble))
     
   }
   def main(args: Array[String]) {
-    test_fold_for_full()
+    //test_fold_for_one()//由于label=0的情况太多,可能会导致所以预测都是0
+    test_sample_for_one()
   }  
 }
