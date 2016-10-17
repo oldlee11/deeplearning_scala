@@ -26,6 +26,8 @@ deeplearning with scala(2.10.6)  java-SE 1.8
     
     CNN(卷积神经网络=多个ConvPoolLayer+Dropout)
     
+    RNN（多层卷积升级网络=多层RNN_HiddenLayer+1层RNN_LogisticRegression,没有实现lstm,支持多层的mlp的递归）
+    
     CNN+dA(卷积神经网络+dA方式预训练[不确定是否完全正确])
     
     RNN（多层卷积升级网络=多层RNN_HiddenLayer+1层RNN_LogisticRegression,没有实现lstm,支持多层的mlp的递归）
