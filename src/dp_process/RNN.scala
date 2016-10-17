@@ -715,20 +715,20 @@ object RNN {
     val train_X:ArrayBuffer[Array[Array[Double]]]=ArrayBuffer()
     val train_Y:ArrayBuffer[Array[Array[Int]]]=ArrayBuffer()
     val max_size=5
-    val win_size =3 
+    val win_size =5 
     val nout=3
-    train_X+=Array(8,7,1).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(1,0,0))
-    train_X+=Array(8,7,2).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(1,0,0))
-    train_X+=Array(8,7,3).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(1,0,0))
-    train_X+=Array(8,7,4).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(1,0,0))    
-    train_X+=Array(2,8,7).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(0,1,0))
-    train_X+=Array(1,8,7).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(0,1,0))
-    train_X+=Array(3,8,7).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(0,1,0))
-    train_X+=Array(4,8,7).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(0,1,0))
-    train_X+=Array(7,1,8).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(0,0,1))
-    train_X+=Array(7,2,8).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(0,0,1))
-    train_X+=Array(7,3,8).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(0,0,1))
-    train_X+=Array(7,4,8).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(0,0,1))
+    train_X+=Array(1,8,7,1,1).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(1,0,0))
+    train_X+=Array(2,8,7,2,2).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(1,0,0))
+    train_X+=Array(3,8,7,3,3).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(1,0,0))
+    train_X+=Array(4,8,7,4,4).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(1,0,0))    
+    train_X+=Array(2,1,8,7,1).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(0,1,0))
+    train_X+=Array(1,2,8,7,2).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(0,1,0))
+    train_X+=Array(3,3,8,7,3).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(0,1,0))
+    train_X+=Array(4,4,8,7,4).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(0,1,0))
+    train_X+=Array(1,7,1,8,1).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(0,0,1))
+    train_X+=Array(2,7,2,8,2).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(0,0,1))
+    train_X+=Array(3,7,3,8,3).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(0,0,1))
+    train_X+=Array(4,7,4,8,4).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); train_Y +=Array(Array(0,0,1))
     
     /*
      * trains
@@ -749,9 +749,9 @@ object RNN {
      * test
      * */
     val test_X:ArrayBuffer[Array[Array[Double]]]=ArrayBuffer()
-    test_X+=Array(8,7,5).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); //100
-    test_X+=Array(5,8,7).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); //010
-    test_X+=Array(7,5,8).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); //001
+    test_X+=Array(5,8,7,5,5).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); //100
+    test_X+=Array(5,5,8,7,5).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); //010
+    test_X+=Array(5,7,5,8,5).map(x=>trans_10_to_2(x,max_size).map(x=>x.toDouble)); //001
     for(i<-0 until test_X.length){
       val forward_times_result=RNN_obj.forward(x_list=test_X(i),dropout=false)      
       val predict=forward_times_result(RNN_obj.win_times-1)._1(RNN_obj.n_layers+1)      
@@ -761,117 +761,12 @@ object RNN {
     }  
     /*
 第0个样本预测值:
-0.983921121050452,0.005235337106477452,0.010843541843070497
+0.9819471601710762,0.013639309057566142,0.004413530771357627
 第1个样本预测值:
-0.004881897906016043,0.8986162415031171,0.09650186059086675
+0.023284073603732178,0.9477253585006292,0.028990567895638482
 第2个样本预测值:
-0.010466833389995836,0.007587477800928765,0.9819456888090754
+0.032991580328785186,0.01667412704343585,0.950334292627779
      * */
-  }
-
-  
-def test_sample_for_one2(){
-    /*
-     * 十进制转化为0000100000类似的编码
-     * trans_y_to_bit(1,8).foreach(x=>print(x+"\t"))    00000010  (8个bit输出,并且第1为=1)
-     * trans_y_to_bit(0,8).foreach(x=>print(x+"\t"))    00000001  (8个bit输出,并且第0为=1)
-     * */
-    def trans_y_to_bit(pred_in:Int,max_size:Int):Array[Int]={
-      val result:Array[Int]=new Array(max_size);
-      result(pred_in)=1
-      result      
-    }
-    /*
-     * 十进制转化为二进制
-     * trans_10_to_2(12,8).foreach(x=>print(x+"\t"))
-     * */
-    def trans_10_to_2(in_10:Int,out_sizes:Int):Array[Int]={
-      val result:Array[Int]=new Array(out_sizes)
-      val tmp=Integer.toBinaryString(in_10)
-      //print(tmp+"\n")
-      for(i<-0 until tmp.length()){
-        result(out_sizes-i-1)=tmp(tmp.length()-i-1).toInt-48
-      }
-      result
-    }    
-    //Array(0.1191,0.7101,0.0012)-->Array(0,1,0)
-    def trans_pred_to_bin(pred_in:Array[Double],max_size:Int):Array[Int]={
-      var max_index:Int=0
-      for(i <-1 until pred_in.length){
-        if(pred_in(i)>pred_in(max_index)){
-          max_index=i
-        }
-      }
-      val result:Array[Int]=new Array(max_size);
-      result(max_index)=1
-      result      
-    }
-    //Array(1,0,0,0,0,0,0,0,0,0)---->0
-    def trans_bin_to_int(bin_in:Array[Int]):Int={
-      var result:Int= -1;
-      for(i <-0 until bin_in.length){
-        if(bin_in(i)==1){
-          result=i
-        }
-      }
-      result
-    } 
-    
-    val train_X:ArrayBuffer[Array[Array[Double]]]=ArrayBuffer()
-    val train_Y:ArrayBuffer[Array[Array[Int]]]=ArrayBuffer()
-    val max_size=12
-    val win_size =1 
-    val nout=3
-    train_X+=Array(Array(0.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0)); train_Y +=Array(Array(0,0,1))
-    train_X+=Array(Array(0.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,1.0,0.0,1.0)); train_Y +=Array(Array(0,0,1))
-    train_X+=Array(Array(0.0,0.0,0.0,0.0,1.0,1.0,0.0,1.0,1.0,1.0,1.0,1.0)); train_Y +=Array(Array(0,0,1))
-    train_X+=Array(Array(0.0,0.0,0.0,0.0,1.0,0.0,1.0,1.0,1.0,1.0,1.0,1.0)); train_Y +=Array(Array(0,0,1))    
-    train_X+=Array(Array(1.0,1.0,1.0,1.0,0.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0)); train_Y +=Array(Array(1,0,0))
-    train_X+=Array(Array(1.0,0.0,1.0,1.0,0.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0)); train_Y +=Array(Array(1,0,0))
-    train_X+=Array(Array(1.0,1.0,1.0,0.0,0.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0)); train_Y +=Array(Array(1,0,0))
-    train_X+=Array(Array(1.0,1.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0)); train_Y +=Array(Array(1,0,0))    
-    train_X+=Array(Array(1.0,0.0,1.0,1.0,1.0,1.0,1.0,1.0,0.0,0.0,0.0,0.0)); train_Y +=Array(Array(0,1,0))
-    train_X+=Array(Array(1.0,1.0,0.0,1.0,1.0,1.0,1.0,1.0,0.0,0.0,0.0,0.0)); train_Y +=Array(Array(0,1,0))
-    train_X+=Array(Array(1.0,1.0,1.0,0.0,1.0,1.0,1.0,1.0,0.0,0.0,0.0,0.0)); train_Y +=Array(Array(0,1,0))
-    train_X+=Array(Array(1.0,1.0,1.0,1.0,0.0,1.0,1.0,1.0,0.0,0.0,0.0,0.0)); train_Y +=Array(Array(0,1,0))
-    
-    /*
-     * trains
-     * */
-    val RNN_obj=new RNN(_n_in=max_size, 
-          _hidden_layer_sizes=Array(100,50), 
-          _n_out=nout,
-          _win_times=win_size,
-          _RNN_structure="one",activation="ReLU")
-    var lr:Double=0.1
-    for(i<-0 until 50){
-      print("训练第"+i+"次:")
-      RNN_obj.train_batch(x_list_batch=train_X.toArray, y_list_batch=train_Y.toArray, lr=lr,dropout=false,debug=false)  
-      //lr=lr*0.9
-    }
-    
-    /*
-     * test
-     * */
-    val test_X:ArrayBuffer[Array[Array[Double]]]=ArrayBuffer()
-    test_X+=Array(Array(1.0,1.0,1.0,1.0,0.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0)); //100
-    test_X+=Array(Array(1.0,0.0,1.0,1.0,1.0,1.0,1.0,1.0,0.0,0.0,0.0,0.0)); //010
-    test_X+=Array(Array(0.0,0.0,0.0,0.0,1.0,1.0,0.0,1.0,1.0,1.0,1.0,1.0)); //001
-    for(i<-0 until test_X.length){
-      val forward_times_result=RNN_obj.forward(x_list=test_X(i),dropout=false)      
-      val predict=forward_times_result(RNN_obj.win_times-1)._1(RNN_obj.n_layers+1)      
-      print("第"+i+"个样本预测值:\n")
-      print(predict.mkString(sep=","))
-      print("\n") 
-    }  
-/*
-第0个样本预测值:
-0.9911854283097301,0.0062315907548936384,0.002582980935376312
-第1个样本预测值:
-0.0023803873630450067,0.9844693012718301,0.013150311365124887
-第2个样本预测值:
-0.009382521034865816,0.015522780060201243,0.9750946989049329
- * */    
   }
   
   
@@ -1067,8 +962,7 @@ def test_sample_for_one2(){
     
   }
   def main(args: Array[String]) {
-    test_fold_for_one()//由于label=0的情况太多,故删除了---59%--不好
-    //test_sample_for_one()//ok
-    //test_sample_for_one2()//ok
+    //test_fold_for_one()//由于label=0的情况太多,故删除了---59%--不好
+    test_sample_for_one()//ok
   }  
 }
