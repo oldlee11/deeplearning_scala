@@ -99,7 +99,7 @@ class RNN_HiddenLayer(_n_in:Int,
                       _W: Array[Array[Double]]=null, 
                       _b: Array[Double]=null,
                       _rng: Random=null,
-                      activation:String="sigmoid") {
+                      activation:String="ReLU") {
   
   val rng=if(_rng==null) new Random(1234) else _rng
   val n_in:Int=_n_in

@@ -86,3 +86,6 @@ class RNN_LogisticRegression(val n_in: Int,
   }
   
 }
+
+
+
