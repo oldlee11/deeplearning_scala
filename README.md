@@ -56,7 +56,7 @@ deeplearning with scala(2.10.6)  java-SE 1.8
     CNN(lenet5):96.08%
 
 
-<三> src/dp_process_fast/* include :(breeze+并行方式实现) 
+<三> src/dp_process_breeze/* include :(breeze+并行方式实现) 
 
 
 
