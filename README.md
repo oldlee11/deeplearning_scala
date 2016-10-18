@@ -30,8 +30,6 @@ deeplearning with scala(2.10.6)  java-SE 1.8
     
     CNN+dA(卷积神经网络+dA方式预训练[不确定是否完全正确])
     
-    
-    
 
 
 使用minst数据集做实验
@@ -41,6 +39,8 @@ deeplearning with scala(2.10.6)  java-SE 1.8
     DBN:88.7%
     
     CNN(lenet5):90.3%
+
+
 
 
 <二> src/dp_process_parallel/* include :（并行方式实现） 
