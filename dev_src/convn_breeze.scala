@@ -69,6 +69,9 @@ object convn_breeze {
    * 注意卷积 于相关的差异是 卷积要先对kernel核做180翻转,相关则不用  
    * 
    * */  
+  /* 
+       版本1 
+  */
   def cor2d(x1_in:DenseMatrix[Double],x2_in:DenseMatrix[Double],type_in:String):DenseMatrix[Double]={
     val rows_1:Int=x1_in.rows    //行数码=hight
     val cols_1:Int=x1_in.cols    //列数据=width
@@ -114,8 +117,12 @@ object convn_breeze {
       null
     }
   }  
-
-  
+  /*
+   * 版本2 使用rot90(x,2)但是不知道如何旋转
+  def cor2d(x1_in:DenseMatrix[Double],x2_in:DenseMatrix[Double],type_in:String):DenseMatrix[Double]={
+    convn2d(x1_in=x1_in,x2_in=rot90(x2_in,2),type_in=type_in)
+  }
+  */
   
   /*test*/
   def main(args: Array[String]) {

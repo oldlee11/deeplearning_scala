@@ -5,8 +5,8 @@ import scala.math.log
 
 import breeze.linalg.DenseMatrix
 import breeze.linalg.DenseVector
-import breeze.linalg._
-import breeze.numerics._
+//import breeze.linalg._
+//import breeze.numerics._
   /**
    * deeplearning with scala and spark
    *
@@ -22,9 +22,9 @@ class LogisticRegression_breeze(n_in_arg:Int,n_out_arg:Int) {
    **********************/  
   val n_in: Int=n_in_arg
   val n_out: Int=n_out_arg
-  val W: DenseMatrix[Double] =matrix_utils.build_2d_matrix((n_out, n_in))//初始化为了0.0
+  var W: DenseMatrix[Double] =matrix_utils.build_2d_matrix((n_out, n_in))//初始化为了0.0
   val W_add: DenseMatrix[Double] =matrix_utils.build_2d_matrix((n_out, n_in))//初始化为了0.0
-  val b: DenseVector[Double] = matrix_utils.build_1d_matrix(n_out)//初始化为了0.0
+  var b: DenseVector[Double] = matrix_utils.build_1d_matrix(n_out)//初始化为了0.0
   val b_add: DenseVector[Double] = matrix_utils.build_1d_matrix(n_out)//初始化为了0.0  
   
   
@@ -44,8 +44,7 @@ class LogisticRegression_breeze(n_in_arg:Int,n_out_arg:Int) {
       }
       p_y_given_x(i) += b(i)
     }*/
-    print(W.rows+"\t"+W.cols+"\t"+x.length+"\t"+b.length+"\n")
-    val p_y_given_x: DenseVector[Double] =(W*x)+b
+    val p_y_given_x:DenseVector[Double] =(W*x)+b
     val p_y_given_x_softmax:DenseVector[Double]=softmax(p_y_given_x)//相当于p_y_given_x_softmax=softmax(p_y_given_x)
     val cross_entropy_result:Double=cross_entropy(y,p_y_given_x_softmax)
     /*
@@ -102,7 +101,7 @@ class LogisticRegression_breeze(n_in_arg:Int,n_out_arg:Int) {
     /* result内的每个值除以result的最大值
     for(i <- 0 until n_out) result(i)=result(i)/sum
     */
-    x:/sum
+    result:/sum
   }
   //使用交叉信息嫡cross-entropy衡量样本输入和经过编解码后输出的相近程度
   //值在>=0 当为0时 表示距离接近
@@ -153,14 +152,19 @@ object LogisticRegression_breeze {
     var W_add:DenseMatrix[Double] =matrix_utils.build_2d_matrix((classifier.n_out, classifier.n_in))
     var b_add: DenseVector[Double] = matrix_utils.build_1d_matrix(classifier.n_out)
     for(epoch <- 0 until n_epochs) {
+      var cross_entropy_result=0.0
       for(i <- 0 until train_N) {
-        val tmp=classifier.train(train_X(i,::).toDenseVector, train_Y(i,::).toDenseVector)
+        val tmp=classifier.train(train_X(i,::).toDenseVector,train_Y(i,::).toDenseVector)
         W_add=W_add+tmp._1
         b_add=b_add+tmp._2
+        cross_entropy_result+=tmp._4
       }
       //updata w b
       W_add=W_add.map(x=>x/train_N)
       b_add=b_add.map(x=>x/train_N)
+      classifier.W=classifier.W + (W_add :* learning_rate)
+      classifier.b=classifier.b + (b_add :* learning_rate)
+      print("cross_entropy is:"+cross_entropy_result/train_N+"\n")
       //learning_rate *= 0.95
     }
     // test data
@@ -180,9 +184,9 @@ object LogisticRegression_breeze {
       }
       println()
       /*
-       * 0.92048 0.04735 0.03217 
-       * 0.01120 0.98404 0.00475 
-       * 0.00196 0.00374 0.99430 
+       * 0.92811 0.04281 0.02909 
+       * 0.00980 0.98614 0.00406 
+       * 0.00162 0.00321 0.99516 
        * */
     }
   }

@@ -54,7 +54,7 @@ class HiddenLayer_breeze(n_in_arg: Int,
     } 
     result.toArray
     */
-    val line_out=(W*input+b)//=W矩阵*input列向量+b列向量
+    val line_out=((W*input)+b)//=W矩阵*input列向量+b列向量
     val output_s=line_out.map(x=>activation_fun(x))//对每个元素做  activation_fun 处理
     val output_d_s=line_out.map(x=>dactivation_fun(x))//对每个元素做  dactivation_fun(activation的导数) 处理
     (output_s,output_d_s)
@@ -111,7 +111,7 @@ class HiddenLayer_breeze(n_in_arg: Int,
     val d_v:Array[Double]=new Array(n_out)//本次bp的d_v
      * */
     //本次bp的d_v
-    val d_v:DenseVector[Double]=(next_layer_w*next_layer_dv):*output_d_s//=矩阵next_layer_w*列向量next_layer_dv然后每个元素对应和output_d_s列向量的每个元素做向乘
+    val d_v:DenseVector[Double]=(next_layer_w.t*next_layer_dv):*output_d_s//=矩阵next_layer_w的转置*列向量next_layer_dv然后每个元素对应和output_d_s列向量的每个元素做向乘
     //W的更新大小
     val W_add_tmp:DenseMatrix[Double]=d_v*input.t//=以d_v为列向量*input为行向量=d_v。length x input.length的矩阵
     //b的更新大小

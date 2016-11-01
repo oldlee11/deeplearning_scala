@@ -24,6 +24,16 @@ object test {
         print(ss(i,j)+"\t")
       }
       print("\n")
-    }     
+    }  
+    
+    val a = DenseMatrix((1.0,2.0,3.0),(4.0,5.0,6.0))
+    val b = DenseMatrix((1.0,2.0),(3.0,4.0),(5.0,6.0))
+    ss=b*a //ss=DenseMatrix.rand(3,2) * DenseMatrix.rand(2,3)
+    for(i<-0 until ss.rows){
+      for(j<-0 until ss.cols){
+        print(ss(i,j)+"\t")
+      }
+      print("\n")
+    }  
   }
 }

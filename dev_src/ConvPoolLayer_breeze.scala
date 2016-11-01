@@ -24,6 +24,7 @@ import breeze.linalg.DenseVector
  * _b 初始化conv卷积层的b系数
  * activation  conv卷积层的非线性处理函数
  * */
+
 class ConvPoolLayer_breeze(input_size_in:(Int,Int),
                            n_kernel_in:Int,
                            kernel_size_in:(Int,Int),
