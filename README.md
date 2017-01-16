@@ -58,12 +58,7 @@ deeplearning with scala(2.10.6)  java-SE 1.8
 
 <三> src/dp_process_breeze/* include :(breeze+并行方式实现) 
 
-    ...开发中...
-
-
-
-
-
+    ..使用breeze blas jblas包
 
 
 
