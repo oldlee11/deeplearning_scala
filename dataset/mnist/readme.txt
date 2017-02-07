@@ -1,0 +1,1 @@
+使用unpack.py文件对mnist.pkl.gz进行解压和处理,产生training_data.txt，test_data.txt以及valid_data.txt这三个数据文件
